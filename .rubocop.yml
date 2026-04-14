@@ -209,6 +209,10 @@ Style/AsciiComments:
 
 Style/ClassAndModuleChildren:
   EnforcedStyle: compact
+  Exclude:
+    # Rails boots config/application.rb before the top-level module is
+    # defined, so this file must use the nested form.
+    - "config/application.rb"
 
 Style/Documentation:
   Include:
