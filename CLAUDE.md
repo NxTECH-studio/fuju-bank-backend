@@ -81,15 +81,6 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 - **デプロイ**: Kamal（Dockerベース）。`config/deploy.yml` と `Dockerfile` を参照。
 - **DB接続**: 環境変数 `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` で設定。Docker環境では `compose.yml` で自動設定。
 
-### 主要ドメイン
-
-- **Artist (作家)**: ふじゅ〜の受け取り手。独自IDとHUD接続用の公開鍵を持つ。
-- **Artifact (作品)**: ふじゅ〜を生成する起点。物理場所またはURLと紐付く。
-- **GazeEvent (視線イベント)**: マイニングシステムから提出される proof-of-feeling。
-- **LedgerEntry (台帳エントリ)**: `artifact_id` から `artist_id` への「感情の譲渡」の不可逆な記録。
-
-API契約の詳細は `docs/api-contract.md` を参照。
-
 ## コードスタイル (RuboCop)
 
 デフォルトと異なる主要ルール:
