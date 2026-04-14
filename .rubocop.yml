@@ -1,0 +1,239 @@
+plugins:
+  - rubocop-rails
+  - rubocop-rspec
+
+require:
+  - ./rubocop_custom/rspec/prefer_let_bang.rb
+
+AllCops:
+  NewCops: enable
+  SuggestExtensions: false
+  TargetRubyVersion: 4.0
+  Exclude:
+    - "bin/**/*"
+    - "node_modules/**/*"
+    - "vendor/bundle/**/*"
+    - "db/cache_schema.rb"
+    - "db/queue_schema.rb"
+
+# ============================================================
+# Layout
+# ============================================================
+
+Layout/LineLength:
+  Max: 160
+  Exclude:
+    - "spec/**/*"
+    - "db/Schemafile"
+
+Layout/FirstArgumentIndentation:
+  EnforcedStyle: consistent
+
+Layout/FirstArrayElementIndentation:
+  EnforcedStyle: consistent
+
+Layout/FirstHashElementIndentation:
+  EnforcedStyle: consistent
+
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+Layout/MultilineOperationIndentation:
+  EnforcedStyle: indented
+
+Layout/SpaceInLambdaLiteral:
+  EnforcedStyle: require_space
+
+# ============================================================
+# Metrics — ほぼ無効化
+# ============================================================
+
+Metrics/AbcSize:
+  Enabled: false
+
+Metrics/BlockLength:
+  Enabled: false
+
+Metrics/ClassLength:
+  Enabled: false
+
+Metrics/CyclomaticComplexity:
+  Enabled: false
+
+Metrics/MethodLength:
+  Enabled: false
+
+Metrics/ModuleLength:
+  Enabled: false
+
+Metrics/PerceivedComplexity:
+  Enabled: false
+
+Metrics/ParameterLists:
+  Max: 10
+
+# ============================================================
+# Naming
+# ============================================================
+
+Naming/PredicatePrefix:
+  ForbiddenPrefixes:
+    - "is_"
+
+Naming/VariableNumber:
+  Enabled: false
+
+Naming/AccessorMethodName:
+  Include:
+    - "app/models/**/*"
+
+# ============================================================
+# Rails
+# ============================================================
+
+Rails/ActionOrder:
+  ExpectedOrder:
+    - index
+    - show
+    - new
+    - create
+    - edit
+    - update
+    - destroy
+
+Rails/Date:
+  EnforcedStyle: strict
+
+Rails/EnvironmentVariableAccess:
+  AllowReads: true
+
+Rails/SkipsModelValidations:
+  Severity: info
+  AllowedMethods:
+    - update_all
+
+Rails/UnknownEnv:
+  Environments:
+    - development
+    - test
+    - staging
+    - production
+
+Rails/I18nLocaleTexts:
+  Enabled: false
+
+Rails/NegateInclude:
+  Enabled: false
+
+Rails/ReflectionClassName:
+  Enabled: false
+
+Rails/WhereMissing:
+  Enabled: false
+
+# ============================================================
+# RSpec
+# ============================================================
+
+RSpec/ContextWording:
+  Enabled: false
+
+RSpec/DescribedClass:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Max: 20
+
+RSpec/ExpectChange:
+  EnforcedStyle: block
+
+RSpec/IndexedLet:
+  Enabled: false
+
+RSpec/LetSetup:
+  Enabled: false
+
+RSpec/PreferLetBang:
+  Enabled: true
+
+RSpec/NamedSubject:
+  Enabled: false
+
+RSpec/NestedGroups:
+  Max: 6
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/MultipleMemoizedHelpers:
+  Max: 20
+
+RSpec/SharedExamples:
+  Enabled: false
+
+# ============================================================
+# Style
+# ============================================================
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+  Exclude:
+    - "Gemfile"
+
+Style/HashSyntax:
+  EnforcedShorthandSyntax: never
+
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Style/GuardClause:
+  Enabled: false
+
+Style/NegatedIf:
+  Enabled: false
+
+Style/RedundantSelf:
+  Enabled: false
+
+Style/AsciiComments:
+  Enabled: false
+
+Style/ClassAndModuleChildren:
+  EnforcedStyle: compact
+
+Style/Documentation:
+  Include:
+    - "app/jobs/**/*"
+    - "app/models/**/*"
+    - "app/services/**/*"
+  Exclude:
+    - "app/models/application_record.rb"
+    - "app/jobs/application_job.rb"
+    - "app/mailers/application_mailer.rb"
+
+Style/RaiseArgs:
+  EnforcedStyle: compact
+
+Style/PreferredHashMethods:
+  EnforcedStyle: verbose
+
+Style/NumericLiterals:
+  MinDigits: 6
+
+Style/NumericPredicate:
+  EnforcedStyle: comparison
+
+Style/Lambda:
+  EnforcedStyle: literal
+
+Style/YodaCondition:
+  EnforcedStyle: forbid_for_equality_operators_only

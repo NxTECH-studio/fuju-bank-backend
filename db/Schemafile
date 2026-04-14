@@ -1,0 +1,71 @@
+# frozen_string_literal: true
+
+# Ridgepole schema definition for fuju-bank
+#
+# 3層アーキテクチャの1層目（銀行層）。
+# 詳細は docs/api-contract.md を参照。
+
+# --------------------------------------------------
+# Artist (作家)
+# ふじゅ〜の受け取り手。独自IDとHUD接続用の公開鍵を持つ。
+# --------------------------------------------------
+create_table "artists", force: :cascade do |t|
+  t.string "handle", null: false
+  t.string "display_name"
+  t.string "public_key", null: false  # HUD接続用
+  t.datetime "created_at", null: false
+  t.datetime "updated_at", null: false
+  t.index ["handle"], name: "index_artists_on_handle", unique: true
+  t.index ["public_key"], name: "index_artists_on_public_key", unique: true
+end
+
+# --------------------------------------------------
+# Artifact (作品)
+# ふじゅ〜を生成する起点。物理場所またはURLと紐付く。
+# --------------------------------------------------
+create_table "artifacts", force: :cascade do |t|
+  t.bigint "artist_id", null: false
+  t.string "title"
+  t.string "origin_type", null: false  # "physical" | "url"
+  t.string "origin_ref", null: false   # 場所スラッグ or URL
+  t.text "description"
+  t.datetime "created_at", null: false
+  t.datetime "updated_at", null: false
+  t.index ["artist_id"], name: "index_artifacts_on_artist_id"
+  t.index ["origin_type", "origin_ref"], name: "index_artifacts_on_origin"
+end
+
+# --------------------------------------------------
+# GazeEvent (視線イベント)
+# マイニングシステムから提出される proof-of-feeling の生データ。
+# --------------------------------------------------
+create_table "gaze_events", force: :cascade do |t|
+  t.bigint "artifact_id", null: false
+  t.float "duration_seconds", null: false
+  t.float "intensity_score"  # マイニング側が算出する没入度スコア 0.0〜1.0
+  t.datetime "observed_at", null: false
+  t.string "client_session_id"  # 匿名な鑑賞者セッション識別子
+  t.datetime "created_at", null: false
+  t.datetime "updated_at", null: false
+  t.index ["artifact_id"], name: "index_gaze_events_on_artifact_id"
+  t.index ["observed_at"], name: "index_gaze_events_on_observed_at"
+end
+
+# --------------------------------------------------
+# LedgerEntry (台帳エントリ)
+# artifact_id から artist_id への「感情の譲渡」の不可逆な記録。
+# 発行された ふじゅ〜 の台帳そのもの。
+# --------------------------------------------------
+create_table "ledger_entries", force: :cascade do |t|
+  t.bigint "artist_id", null: false
+  t.bigint "artifact_id", null: false
+  t.bigint "gaze_event_id", null: false
+  t.integer "amount", null: false        # 発行ふじゅ〜量
+  t.datetime "issued_at", null: false
+  t.datetime "created_at", null: false
+  t.datetime "updated_at", null: false
+  t.index ["artist_id"], name: "index_ledger_entries_on_artist_id"
+  t.index ["artifact_id"], name: "index_ledger_entries_on_artifact_id"
+  t.index ["gaze_event_id"], name: "index_ledger_entries_on_gaze_event_id", unique: true
+  t.index ["issued_at"], name: "index_ledger_entries_on_issued_at"
+end
