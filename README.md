@@ -1,87 +1,105 @@
-# fuju-bank-backend
+# Fuju Bank Backend
 
-fuju-bank（感情を担保とする中央銀行）の **バックエンド実装**。
-「ふじゅ〜」という仮想通貨の発行・記帳・決済・配信を司る
-Rails 8.1 API専用アプリケーション (Ruby 4.0.2, PostgreSQL)。
-
-本リポジトリは **proof-of-feeling 型の中央銀行** の API 実装であり、マイニングクライアント
-（例: `glyca-mining`）や参照UI（例: `glyca-client-web`）から呼び出される。
-
-## 位置づけ
-
-3層アーキテクチャの **1層目（銀行層）** に相当する。
-
-```
-┌─────────────────────────────────────┐
-│ 3. デモ用SNS (別リポジトリ)          │
-└─────────────────────────────────────┘
-              ↕
-┌─────────────────────────────────────┐
-│ 2. マイニングシステム (別リポジトリ) │
-└─────────────────────────────────────┘
-              ↕ POST /api/encounters
-┌─────────────────────────────────────┐
-│ 1. 銀行システム (このリポジトリ)     │  ← ここ
-└─────────────────────────────────────┘
-```
-
-## 基本要件
-
-- **非可逆的発行**: 鑑賞者の「滞留時間」や「視線強度」という物理的コストのみを原資として新規発行される
-- **不自由の記録（トランザクション）**: 単なる数値の移動ではなく、「誰が、どの作品に、何秒魂を削られたか」をメタデータとして保持
-- **通貨の特性**: 基本的に「作家への感謝（負債）」であるため、作家が受け取った瞬間に価値が確定する
-
-## 主要エンティティ
-
-- **Artist (作家)**: ふじゅ〜の受け取り手。独自IDとHUD接続用の公開鍵を持つ
-- **Artifact (作品)**: ふじゅ〜を生成する起点。物理場所またはURLと紐付く
-- **GazeEvent (視線イベント)**: マイニングシステムから提出される proof-of-feeling
-- **LedgerEntry (台帳エントリ)**: `artifact_id` から `artist_id` への「感情の譲渡」の不可逆な記録
+Rails 8.1 API専用バックエンドアプリケーション。
 
 ## 技術スタック
 
-glyca-backend と同じ構成を踏襲する。
+| カテゴリ | 技術 |
+|---|---|
+| 言語 | Ruby 4.0.2 |
+| フレームワーク | Rails 8.1 (API only) |
+| DB | PostgreSQL |
+| スキーマ管理 | Ridgepole |
+| バックグラウンドジョブ | Solid Queue |
+| キャッシュ | Solid Cache |
+| デプロイ | Kamal (Docker) |
+| テスト | RSpec, FactoryBot |
+| Lint | RuboCop |
 
-- Ruby on Rails 8.1 (API only)
-- Ruby 4.0.2
-- PostgreSQL 17
-- [Ridgepole](https://github.com/ridgepole/ridgepole) によるスキーマ管理
-- Solid Queue（バックグラウンドジョブ）
-- Solid Cache（キャッシュ）
-- Solid Cable / ActionCable（リアルタイム配信）
-- RSpec + FactoryBot（テスト）
-- RuboCop（Lint）
-- Brakeman / bundler-audit（セキュリティ）
-- Docker Compose（開発環境）
-- Kamal（デプロイ）
+## セットアップ（Docker）
 
-## セットアップ
-
-> **注**: 本リポジトリは現状「設計書 + インフラのみ」の段階。Rails 本体（`app/`, `config/`, `Gemfile` 等）はまだ生成されていない。
-> `rails new . --api --database=postgresql --skip-bundle` を実行して初期化する想定。
-
-Rails 本体の生成後に以下が使える:
+Docker を使って環境構築できます。PostgreSQL を含めたすべての依存をコンテナ内で完結させます。
 
 ```bash
-make setup   # 初回セットアップ（ビルド→起動→DB作成→スキーマ適用）
-make up      # コンテナ起動
-make rspec   # テスト実行
-make help    # コマンド一覧
+# 初回セットアップ（ビルド → 起動 → DB作成 → スキーマ適用）
+make setup
+
+# 2回目以降の起動
+make up
+
+# 停止
+make down
 ```
 
-## ドキュメント
+> **前提条件**: Docker と Docker Compose がインストールされていること。
 
-- [docs/api-contract.md](docs/api-contract.md) — 公開API契約（他2層との境界面）
-- [CLAUDE.md](CLAUDE.md) — Claude Code 用の作業ガイド
+### ローカル直接セットアップ
 
-## ブランチ戦略
+Docker を使わない場合は、PostgreSQL をローカルにインストールした上で以下を実行してください。
 
-- **デフォルト**: `develop`
-- **本番**: `main`
-- **feature**: `feat/xxx` を `develop` から切る
+```bash
+bundle install
+bin/rails db:create
+bundle exec ridgepole -c config/database.yml -E development --apply -f db/Schemafile
+bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
+bin/rails server
+```
 
-## プロジェクトの系譜
+### 環境変数
 
-本プロジェクトは NxTECH Workspace における「ツクヨミ」プロジェクトの議論から派生した、
-感情経済の中央銀行コンポーネントの独立実装である。設計経緯は Notion の
-「プロダクト落とし所 v1〜v5」ページを参照。
+| 変数名 | 説明 | Docker時のデフォルト |
+|---|---|---|
+| `DB_HOST` | PostgreSQL ホスト | `db`（コンテナ名） |
+| `DB_USERNAME` | PostgreSQL ユーザー名 | `fuju_bank_backend` |
+| `DB_PASSWORD` | PostgreSQL パスワード | `password` |
+
+## 開発コマンド（Makefile）
+
+`make help` で一覧を確認できます。主要なコマンド:
+
+```bash
+make setup            # 初回セットアップ
+make up / make down   # コンテナ起動 / 停止
+make console          # Rails コンソール
+make sh               # コンテナ内シェル
+make rspec            # テスト実行（make rspec ARGS=spec/models/ で絞り込み可）
+make rubocop          # RuboCop チェック
+make rubocop/fix      # RuboCop 安全な自動修正
+make rubocop/fix-all  # RuboCop 全自動修正（unsafe 含む）
+make brakeman         # セキュリティ解析
+make bundler-audit    # Gem 脆弱性スキャン
+make db/schema/apply  # Ridgepole スキーマ適用
+make db/reset         # DB再作成
+make logs             # ログ表示
+make clean            # コンテナ・ボリューム全削除
+```
+
+Docker を使わない場合の直接コマンド:
+
+```bash
+bundle exec rspec
+bundle exec rubocop
+bin/brakeman --no-pager
+bin/bundler-audit
+bundle exec ridgepole -c config/database.yml -E development --apply -f db/Schemafile
+bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
+```
+
+## 開発フロー（Claude Code）
+
+このプロジェクトでは Claude Code のカスタムコマンドを活用した開発フローを採用しています。
+
+```
+1. /start-with-plan <方針ファイル>
+   → 実装方針に沿ってコードを実装。
+
+2. /code-review
+   → 並列エージェントによるセルフレビュー（セキュリティ・設計・テスト・可読性・Lint）。
+
+3. /pr-creation
+   → PR 作成。
+
+4. 人間がレビュー / マージ / QA / リリース
+```
+
+カスタムコマンドの定義は `.claude/commands/` を参照してください。
