@@ -35,6 +35,9 @@ gem "image_processing", "~> 1.2"
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin Ajax possible
 # gem "rack-cors"
 
+# Schema management (used instead of Rails migrations) [https://github.com/ridgepole/ridgepole]
+gem "ridgepole"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
@@ -45,6 +48,19 @@ group :development, :test do
   # Static analysis for security vulnerabilities [https://brakemanscanner.org/]
   gem "brakeman", require: false
 
-  # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
-  gem "rubocop-rails-omakase", require: false
+  # RuboCop + plugins referenced by .rubocop.yml and CI (reviewdog/action-rubocop)
+  gem "rubocop", require: false
+  gem "rubocop-rails", require: false
+  gem "rubocop-rspec", require: false
+  gem "rubocop-performance", require: false
+  gem "rubocop-i18n", require: false
+  gem "rubocop-rake", require: false
+
+  # RSpec + helpers used by the spec suite
+  gem "rspec-rails"
+  gem "factory_bot_rails"
+  gem "database_rewinder"
+  gem "bullet"
+  gem "test-prof"
+  gem "simplecov", require: false
 end
