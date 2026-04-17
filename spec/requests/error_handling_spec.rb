@@ -6,7 +6,10 @@ RSpec.describe "ErrorHandling", type: :request do
       get "/testing_errors/success" => "testing_errors#success"
       get "/testing_errors/not_found" => "testing_errors#not_found"
       get "/testing_errors/record_invalid" => "testing_errors#record_invalid"
+      get "/testing_errors/record_invalid_multiple" => "testing_errors#record_invalid_multiple"
       get "/testing_errors/insufficient_balance" => "testing_errors#insufficient_balance"
+      get "/testing_errors/insufficient_balance_custom_message" => "testing_errors#insufficient_balance_custom_message"
+      get "/testing_errors/bank_error_custom_status" => "testing_errors#bank_error_custom_status"
       get "/testing_errors/boom" => "testing_errors#boom"
     end
   end
@@ -44,10 +47,17 @@ RSpec.describe "ErrorHandling", type: :request do
       expect(parsed.dig("error", "code")).to eq("VALIDATION_FAILED")
       expect(parsed.dig("error", "message")).to include("is invalid")
     end
+
+    it "複数 errors を ', ' 区切りで結合して返す" do
+      get "/testing_errors/record_invalid_multiple"
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body.dig("error", "message")).to eq("Name is too short, Name can't be blank")
+    end
   end
 
-  describe "BankError サブクラス" do
-    it "InsufficientBalanceError の code / status が反映される" do
+  describe "BankError" do
+    it "InsufficientBalanceError のデフォルト code / status / message が反映される" do
       get "/testing_errors/insufficient_balance"
 
       expect(response).to have_http_status(:unprocessable_entity)
@@ -58,10 +68,31 @@ RSpec.describe "ErrorHandling", type: :request do
         },
       )
     end
+
+    it "InsufficientBalanceError のカスタム message が API レスポンスまで貫通する" do
+      get "/testing_errors/insufficient_balance_custom_message"
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body.dig("error", "message")).to eq("balance: 0 JFY")
+    end
+
+    it "BankError の http_status 上書きが HTTP ステータスに反映される" do
+      get "/testing_errors/bank_error_custom_status"
+
+      expect(response).to have_http_status(418)
+      expect(response.parsed_body).to eq(
+        "error" => {
+          "code" => "TEAPOT",
+          "message" => "short and stout",
+        },
+      )
+    end
   end
 
   describe "StandardError (非 development 環境)" do
-    it "500 で INTERNAL_ERROR を返す" do
+    it "500 で INTERNAL_ERROR を返し、例外を Rails.logger.error に出力する" do
+      allow(Rails.logger).to receive(:error)
+
       get "/testing_errors/boom"
 
       expect(response).to have_http_status(:internal_server_error)
@@ -71,6 +102,7 @@ RSpec.describe "ErrorHandling", type: :request do
           "message" => "内部エラーが発生しました",
         },
       )
+      expect(Rails.logger).to have_received(:error).with(a_string_including("boom"))
     end
   end
 end
