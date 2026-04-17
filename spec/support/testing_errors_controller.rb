@@ -1,5 +1,3 @@
-# ErrorResponder の request spec 専用ダミーコントローラ。
-# 本番ルートには載せず、spec 内で Rails.application.routes.draw 経由で一時的にマウントする。
 class TestingErrorsController < ApplicationController
   def success
     render(json: { ok: true }, status: :ok)
@@ -23,10 +21,8 @@ class TestingErrorsController < ApplicationController
     raise StandardError.new("boom")
   end
 
-  # ActiveRecord::RecordInvalid はモデルインスタンスを要求するため、
-  # errors だけを差し替え可能なダミーレコードを用意する。
+  # ActiveRecord::RecordInvalid.new はモデルインスタンスを要求するため、errors だけ持つダミーを使う。
   class DummyRecord
     include ActiveModel::Model
-    include ActiveModel::Validations
   end
 end

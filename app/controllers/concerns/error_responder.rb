@@ -1,8 +1,7 @@
 module ErrorResponder
   extend ActiveSupport::Concern
 
-  # rescue_from は LIFO で評価される（後勝ち）。より汎用的な StandardError を先に登録し、
-  # 具体的な例外クラスをあとに登録することで、具体的な handler が優先されるようにする。
+  # rescue_from は LIFO。汎用的な例外を先に登録し、具体的な handler を優先させる。
   included do
     rescue_from StandardError, with: :render_internal_error unless Rails.env.development?
     rescue_from ActiveRecord::RecordNotFound, with: :render_not_found

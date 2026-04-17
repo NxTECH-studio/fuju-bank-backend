@@ -72,10 +72,5 @@ RSpec.describe "ErrorHandling", type: :request do
         },
       )
     end
-
-    it "ApplicationController に StandardError の rescue_handler が登録されている" do
-      handled = ApplicationController.rescue_handlers.map(&:first)
-      expect(handled).to include("StandardError")
-    end
   end
 end

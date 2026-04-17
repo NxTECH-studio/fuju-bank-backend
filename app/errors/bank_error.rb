@@ -1,4 +1,3 @@
-# 銀行ドメインの基底例外。code / http_status を保持し、ErrorResponder で一律に JSON 化される。
 class BankError < StandardError
   def initialize(code:, message:, http_status: 422)
     super(message)
