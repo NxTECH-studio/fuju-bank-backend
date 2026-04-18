@@ -25,3 +25,25 @@ create_table "artifacts", force: :cascade do |t|
 
   t.index %w[user_id created_at]
 end
+
+create_table "accounts", force: :cascade do |t|
+  t.references "user", foreign_key: true, comment: "kind = 'user' のときに必須"
+  t.string "kind", null: false, comment: "system_issuance / user"
+  t.bigint "balance_fuju", null: false, default: 0, comment: "残高キャッシュ（entries SUM と一致させる）"
+  t.timestamps
+
+  t.index %w[kind]
+  t.index %w[user_id], unique: true, where: "user_id IS NOT NULL",
+                       name: "index_accounts_on_user_id_unique_when_present"
+end
+
+# CHECK 制約: User 口座は残高が負になってはいけない（system_issuance は発行原資なので負値 OK）
+execute <<~SQL.squish
+  ALTER TABLE accounts
+    DROP CONSTRAINT IF EXISTS balance_non_negative_for_user
+SQL
+execute <<~SQL.squish
+  ALTER TABLE accounts
+    ADD CONSTRAINT balance_non_negative_for_user
+    CHECK (kind <> 'user' OR balance_fuju >= 0)
+SQL
