@@ -10,13 +10,22 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:created)
         parsed = response.parsed_body
+        expect(parsed.keys).to match_array(%w[id name public_key balance_fuju created_at])
         expect(parsed).to include(
           "name" => "Alice",
           "balance_fuju" => 0,
           "public_key" => nil,
         )
         expect(parsed["id"]).to be_present
-        expect(parsed["created_at"]).to be_present
+        expect(parsed["created_at"]).to match(/\A\d{4}-\d{2}-\d{2}T/)
+      end
+
+      it "作成された Account は kind=user / balance_fuju=0 で初期化される" do
+        post("/users", params: { user: { name: "Alice" } })
+
+        account = User.last.account
+        expect(account.kind).to eq("user")
+        expect(account.balance_fuju).to eq(0)
       end
 
       it "public_key を指定した場合もレスポンスに反映される" do

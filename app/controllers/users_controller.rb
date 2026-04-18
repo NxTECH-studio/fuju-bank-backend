@@ -1,7 +1,7 @@
 class UsersController < ApplicationController
   def create
     user = User.create!(user_params)
-    render(json: serialize(user), status: :created)
+    render(json: serialize_user(user), status: :created)
   end
 
   private
@@ -10,7 +10,7 @@ class UsersController < ApplicationController
     params.expect(user: %i[name public_key])
   end
 
-  def serialize(user)
+  def serialize_user(user)
     {
       id: user.id,
       name: user.name,
