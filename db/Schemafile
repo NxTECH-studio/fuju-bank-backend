@@ -61,3 +61,23 @@ create_table "ledger_transactions", force: :cascade do |t|
   t.index %w[kind created_at]
   t.index %w[artifact_id created_at]
 end
+
+create_table "ledger_entries", force: :cascade do |t|
+  t.references "ledger_transaction", null: false, foreign_key: true
+  t.references "account", null: false, foreign_key: true, index: false, comment: "account_id 単独の index は (account_id, created_at) で代替するため抑止"
+  t.bigint "amount", null: false, comment: "借方=正 / 貸方=負。SUM(amount) per transaction = 0"
+  t.timestamps
+
+  t.index %w[account_id created_at]
+end
+
+# CHECK 制約: amount が 0 の entry は意味を持たないため禁止
+execute <<~SQL.squish
+  ALTER TABLE ledger_entries
+    DROP CONSTRAINT IF EXISTS amount_non_zero
+SQL
+execute <<~SQL.squish
+  ALTER TABLE ledger_entries
+    ADD CONSTRAINT amount_non_zero
+    CHECK (amount <> 0)
+SQL
