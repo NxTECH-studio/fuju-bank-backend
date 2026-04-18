@@ -27,7 +27,7 @@ RSpec.describe "Ledger Mint", type: :request do
         post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 50 })
 
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id kind artifact_id idempotency_key metadata occurred_at created_at])
+        expect(parsed.keys).to match_array(%w[id kind artifact_id idempotency_key memo metadata occurred_at created_at])
         expect(parsed).to include(
           "kind" => "mint",
           "artifact_id" => artifact.id,
