@@ -46,4 +46,42 @@ RSpec.describe "Users", type: :request do
       end
     end
   end
+
+  describe "GET /users/:id" do
+    context "正常系" do
+      let!(:user) { create(:user, name: "Alice", public_key: "pk_abc") }
+
+      it "200 と User 情報・残高を返す" do
+        get("/users/#{user.id}")
+
+        expect(response).to have_http_status(:ok)
+        parsed = response.parsed_body
+        expect(parsed.keys).to match_array(%w[id name public_key balance_fuju created_at])
+        expect(parsed).to include(
+          "id" => user.id,
+          "name" => "Alice",
+          "public_key" => "pk_abc",
+          "balance_fuju" => 0,
+        )
+      end
+
+      it "account.balance_fuju の値を反映する" do
+        user.account.update!(balance_fuju: 1234)
+
+        get("/users/#{user.id}")
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body).to include("balance_fuju" => 1234)
+      end
+    end
+
+    context "異常系" do
+      it "存在しない ID のとき 404 NOT_FOUND を返す" do
+        get("/users/999999")
+
+        expect(response).to have_http_status(:not_found)
+        expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
+      end
+    end
+  end
 end
