@@ -1,5 +1,3 @@
-# User 作成・参照 API。
-# MVP では未認証（管理者が手動で叩く想定）。認証は将来別基盤で拡張する。
 class UsersController < ApplicationController
   def create
     user = User.create!(user_params)
