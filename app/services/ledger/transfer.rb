@@ -31,6 +31,7 @@ class Ledger::Transfer
     return existing if existing
 
     ActiveRecord::Base.transaction do
+      # TODO: 本番規模ではデッドロック回避のため account.id 昇順で lock! すること（A→B と B→A の同時送金対策）。
       from_account = @from_user.account.lock!
       to_account = @to_user.account.lock!
 
