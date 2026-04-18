@@ -9,6 +9,8 @@ Rails.application.routes.draw do
     resources :transactions, only: %i[index], controller: "user_transactions"
   end
 
+  resources :artifacts, only: %i[create show]
+
   # Defines the root path route ("/")
   # root "posts#index"
 end
