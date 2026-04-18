@@ -25,8 +25,8 @@ make down                                # コンテナ停止
 # テスト
 make rspec                               # 全テスト実行
 make rspec ARGS=spec/models/             # ディレクトリ単位で実行
-make rspec ARGS=spec/models/artist_spec.rb # ファイル単位で実行
-make rspec ARGS=spec/models/artist_spec.rb:42  # 行番号指定で実行
+make rspec ARGS=spec/models/user_spec.rb # ファイル単位で実行
+make rspec ARGS=spec/models/user_spec.rb:42  # 行番号指定で実行
 
 # Lint
 make rubocop                             # 全チェック
@@ -76,7 +76,7 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 - **スキーマ管理**: Railsマイグレーションではなく [Ridgepole](https://github.com/ridgepole/ridgepole) を使用。テーブル定義は `db/Schemafile` に記述（またはサブファイルをrequire）。
 - **バックグラウンドジョブ**: Solid Queue（DBベースのActive Jobアダプタ）。
 - **キャッシュ**: Solid Cache（DBベースのRails.cacheアダプタ）。
-- **リアルタイム配信**: Solid Cable / ActionCable。`ArtistChannel` を通じて作家HUDへ ledger イベントを push。
+- **リアルタイム配信**: Solid Cable / ActionCable。`UserChannel` を通じてユーザー HUD へ ledger イベントを push。
 - **開発環境**: Docker Compose（`compose.yml` + `Dockerfile.dev`）。Makefile でコマンドをラップ。
 - **デプロイ**: Kamal（Dockerベース）。`config/deploy.yml` と `Dockerfile` を参照。
 - **DB接続**: 環境変数 `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` で設定。Docker環境では `compose.yml` で自動設定。
