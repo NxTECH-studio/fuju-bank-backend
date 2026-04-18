@@ -1,4 +1,3 @@
-# ふじゅ〜の記帳 API。マイニング層（2 層目）が mint を呼び出して発行を通知する。
 # TODO: 認証は将来拡張（マイニング層からの署名検証など）
 class LedgerController < ApplicationController
   include Idempotent
@@ -16,13 +15,13 @@ class LedgerController < ApplicationController
       occurred_at: parse_occurred_at(mint_params[:occurred_at]),
     )
 
-    render(json: serialize(tx), status: :ok)
+    render(json: serialize_transaction(tx), status: :ok)
   end
 
   private
 
   def mint_params
-    params.expect(
+    @mint_params ||= params.expect(
       ledger: [
         :artifact_id,
         :user_id,
@@ -37,7 +36,7 @@ class LedgerController < ApplicationController
     value.present? ? Time.zone.parse(value) : Time.current
   end
 
-  def serialize(transaction)
+  def serialize_transaction(transaction)
     {
       id: transaction.id,
       kind: transaction.kind,
