@@ -99,7 +99,6 @@ RSpec.describe Ledger::Notifier do
       end
 
       it "user_id=nil の account の entry は broadcast されない" do
-        # credit_entry の account.user を nil に見せかけ、ガード節で skip されることを確認する。
         credit_entry = tx.entries.find { |e| e.amount > 0 }
         allow(credit_entry.account).to receive(:user).and_return(nil)
         allow(tx).to receive(:entries).and_return([credit_entry])

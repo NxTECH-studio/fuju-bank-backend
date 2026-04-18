@@ -128,14 +128,11 @@ RSpec.describe Ledger::Transfer do
         expect { call! }.not_to have_broadcasted_to(from_user).from_channel(UserChannel)
       end
 
-      it "broadcast が失敗しても記帳は確定する（トランザクション外で実行）" do
+      it "broadcast が失敗しても記帳は確定する（呼び出し元へは raise / transaction 外で実行）" do
         allow(Ledger::Notifier).to receive(:broadcast_credits).and_raise(StandardError, "broadcast failed")
 
-        expect do
-          call!
-        rescue StandardError
-          nil
-        end.to change { LedgerTransaction.count }.by(1)
+        expect { call! }.to raise_error(StandardError, "broadcast failed")
+        expect(LedgerTransaction.count).to eq(1)
         expect(from_user.account.reload.balance_fuju).to eq(initial_balance - amount)
         expect(to_user.account.reload.balance_fuju).to eq(amount)
       end
