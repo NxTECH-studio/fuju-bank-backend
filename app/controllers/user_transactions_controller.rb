@@ -9,7 +9,7 @@ class UserTransactionsController < ApplicationController
     account_id = user.account.id
     entries = LedgerEntry
       .where(account_id: account_id)
-      .includes(ledger_transaction: { entries: :account })
+      .preload(ledger_transaction: { entries: :account })
       .order(id: :desc)
       .limit(resolved_limit)
 
