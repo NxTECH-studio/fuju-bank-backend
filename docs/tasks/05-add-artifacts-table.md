@@ -27,17 +27,17 @@
 # db/schema/artifacts.rb
 
 create_table "artifacts", force: :cascade do |t|
-  t.references "artist", null: false, foreign_key: true, comment: "作者 Artist"
+  t.references "user", null: false, foreign_key: true, comment: "作者 User"
   t.string "title", null: false
   t.string "location_kind", null: false, comment: "physical / url"
   t.string "location_url", comment: "location_kind = 'url' の場合に必須"
   t.timestamps
 
-  t.index ["artist_id", "created_at"]
+  t.index ["user_id", "created_at"]
 end
 ```
 
-- `artist_id`: FK。Artist が作者。
+- `user_id`: FK。User が作者。
 - `title`: NOT NULL。
 - `location_kind`: 文字列 enum（`"physical"` / `"url"`）。Rails の `enum` でアプリ側にマッピングする（#10）。
 - `location_url`: URL の場合に値が入る。物理作品では NULL。
@@ -48,7 +48,7 @@ end
 require File.join(schema_dir, "artifacts")
 ```
 
-（`artists` の require より後に書く。FK 依存のため順序重要）
+（`users` の require より後に書く。FK 依存のため順序重要）
 
 ## 実装ステップ
 
@@ -76,6 +76,6 @@ require File.join(schema_dir, "artifacts")
 ## 受け入れ基準
 
 - [ ] `db/schema/artifacts.rb` が作成されている
-- [ ] `db/Schemafile` で `artists` の後に require されている
+- [ ] `db/Schemafile` で `users` の後に require されている
 - [ ] `make db/schema/apply` が dev + test で成功する
-- [ ] FK が artists を参照している
+- [ ] FK が users を参照している

@@ -4,7 +4,7 @@
 
 ## 概要
 
-`Ledger::Mint` / `Ledger::Transfer` が成功したあと、受け手 Artist の `ArtistChannel` に
+`Ledger::Mint` / `Ledger::Transfer` が成功したあと、受け手 User の `UserChannel` に
 `credit` ペイロードを broadcast する。
 
 ## 背景・目的
@@ -31,7 +31,7 @@
 
 1. `app/services/ledger/notifier.rb`
    ```ruby
-   # 記帳イベントを ArtistChannel へ broadcast するユーティリティ。
+   # 記帳イベントを UserChannel へ broadcast するユーティリティ。
    class Ledger::Notifier
      # @param ledger_transaction [LedgerTransaction]
      def self.broadcast_credits(ledger_transaction)
@@ -44,10 +44,10 @@
 
      def broadcast_credits
        credit_entries.each do |entry|
-         artist = entry.account.artist
-         next if artist.nil? # system_issuance 等は通知しない
+         user = entry.account.user
+         next if user.nil? # system_issuance 等は通知しない
 
-         ArtistChannel.broadcast_to(artist, payload_for(entry))
+         UserChannel.broadcast_to(user, payload_for(entry))
        end
      end
 
@@ -64,17 +64,17 @@
          transaction_id: @tx.id,
          transaction_kind: @tx.kind,
          artifact_id: @tx.artifact_id,
-         from_artist_id: from_artist_id,
+         from_user_id: from_user_id,
          metadata: @tx.metadata,
          occurred_at: @tx.occurred_at.iso8601,
        }
      end
 
-     def from_artist_id
+     def from_user_id
        return nil unless @tx.transfer_kind?
 
        debit_entry = @tx.entries.find { |e| e.amount < 0 }
-       debit_entry&.account&.artist_id
+       debit_entry&.account&.user_id
      end
    end
    ```
@@ -89,15 +89,15 @@
    ```
    → 既存の `ActiveRecord::Base.transaction do ... end` の返り値で受ける形に変更する。
 3. spec
-   - `ArtistChannel.broadcast_to` が呼ばれる（`have_broadcasted_to` matcher）
-   - mint → 受け手 Artist に 1 回 broadcast
-   - transfer → 受け手 Artist に 1 回 broadcast、送り手には無し
+   - `UserChannel.broadcast_to` が呼ばれる（`have_broadcasted_to` matcher）
+   - mint → 受け手 User に 1 回 broadcast
+   - transfer → 受け手 User に 1 回 broadcast、送り手には無し
    - payload 形式の検証
 
 ## テスト要件
 
-- `have_broadcasted_to(artist).from_channel(ArtistChannel).with { |payload| ... }` を使う
-- system_issuance 口座は artist_id が nil なので broadcast されない
+- `have_broadcasted_to(user).from_channel(UserChannel).with { |payload| ... }` を使う
+- system_issuance 口座は user_id が nil なので broadcast されない
 - broadcast 失敗時に DB が rollback **されない**（トランザクション外で実行するため）
   - 逆に broadcast 内でエラーが出ても記帳は確定することを spec で明示する
 
@@ -108,7 +108,7 @@
   - broadcast 失敗は記帳の成功を妨げるべきではない
 - 失敗時はログに残すが raise はしない方針（ここは `rescue => e; Rails.logger.error(...)` を入れるかを spec で合意）。MVP では raise する（早期発見優先）。
 - payload の `amount` は常に正（受け手視点）。送り手視点の `debit` は送らない（MVP）。
-- `from_artist_id` は transfer のみ設定。mint は常に nil。
+- `from_user_id` は transfer のみ設定。mint は常に nil。
 
 ## 非スコープ
 
@@ -118,7 +118,7 @@
 
 ## 受け入れ基準
 
-- [ ] mint で受け手 Artist に 1 回 broadcast
-- [ ] transfer で受け手 Artist のみに broadcast
+- [ ] mint で受け手 User に 1 回 broadcast
+- [ ] transfer で受け手 User のみに broadcast
 - [ ] payload が `docs/tasks/00-overview.md` の仕様通り
 - [ ] RSpec / RuboCop が通る

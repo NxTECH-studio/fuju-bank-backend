@@ -35,7 +35,7 @@
    # テーブル定義はこのファイルに直接 create_table を並べる（フラット運用）。
    # MVP 規模のためサブファイル分割は行わない。複雑化してきたら `db/schema/*.rb` に分割する方針へ移行する。
    #
-   # FK 依存があるテーブルは参照先を先に書くこと（例: artists → accounts → ledger_transactions → ledger_entries）。
+   # FK 依存があるテーブルは参照先を先に書くこと（例: users → accounts → ledger_transactions → ledger_entries）。
    # 反映コマンドは `make db/schema/apply`（dev + test 両環境に適用）。
    ```
 2. `make db/schema/apply` が正常終了することを確認（テーブル 0 個の状態で apply が通る）
@@ -47,7 +47,7 @@
 
 ## 技術的な補足
 
-- `create_table "artists" do |t| ... end` のような Ridgepole DSL を Schemafile のトップレベルに書く。
+- `create_table "users" do |t| ... end` のような Ridgepole DSL を Schemafile のトップレベルに書く。
 - FK 制約は後続のテーブル定義で参照先が先にあることを前提にするため、**追記順序に注意**（参照先 → 参照元）。
 - 分割に移行する場合は、別タスクとして Dir.glob ではなく明示 `require` で順序固定する設計に切り替える（将来検討）。
 
