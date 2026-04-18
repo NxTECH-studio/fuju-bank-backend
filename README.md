@@ -254,30 +254,6 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
   `develop → main` のリリース PR は GitHub Actions で自動生成・更新されます。
 - **本番ブランチ**: `main`（ブランチ保護あり、直接 push 禁止）。
 
-## 開発フロー（Claude Code）
-
-このプロジェクトでは Claude Code のカスタムコマンドを活用した開発フローを採用しています。
-
-```
-1. /create-task <やりたいこと>
-   → エンジニアとの対話で実装方針ドキュメント（docs/tasks/）を作成。
-
-2. /start-with-plan <方針ファイル>
-   → 実装方針に沿ってコードを実装。
-
-3. /code-review
-   → 並列エージェントによるセルフレビュー（セキュリティ・設計・テスト・可読性・Lint）。
-
-4. /pr-creation
-   → PR 作成。
-
-5. 人間がレビュー / マージ / QA / リリース
-```
-
-カスタムコマンドの定義は `.claude/commands/`、エージェント定義は `.claude/agents/` を
-参照してください。進行中の実装方針ドキュメントは `docs/tasks/21-` 〜 `25-`（AuthCore 連携）
-にあります。
-
 ## 参照
 
 - `CLAUDE.md`: プロジェクトルール、Docker / Makefile / RuboCop 規約
