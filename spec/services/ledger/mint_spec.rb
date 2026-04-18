@@ -118,6 +118,20 @@ RSpec.describe Ledger::Mint do
       end
     end
 
+    context "broadcast" do
+      it "mint 成功後に受け手 User へ UserChannel 経由で 1 回 broadcast される" do
+        expect { call! }.to have_broadcasted_to(user).from_channel(UserChannel).once
+      end
+
+      it "broadcast が失敗しても記帳は確定する（呼び出し元へは raise / transaction 外で実行）" do
+        allow(Ledger::Notifier).to receive(:broadcast_credits).and_raise(StandardError, "broadcast failed")
+
+        expect { call! }.to raise_error(StandardError, "broadcast failed")
+        expect(LedgerTransaction.count).to eq(1)
+        expect(user.account.reload.balance_fuju).to eq(amount)
+      end
+    end
+
     context "異常系" do
       [0, -10, 1.5, "100", nil].each do |bad_amount|
         it "amount=#{bad_amount.inspect} は ValidationFailedError を raise" do
