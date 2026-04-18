@@ -12,4 +12,8 @@ RSpec.describe ValidationFailedError do
     expect(error.message).to eq("field is invalid")
     expect(error.http_status).to eq(:bad_request)
   end
+
+  it "message を省略すると ArgumentError を返す" do
+    expect { described_class.new }.to raise_error(ArgumentError)
+  end
 end

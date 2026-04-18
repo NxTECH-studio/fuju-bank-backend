@@ -5,6 +5,8 @@ module Idempotent
   extend ActiveSupport::Concern
 
   IDEMPOTENCY_HEADER = "Idempotency-Key".freeze
+  # 推測困難性の最小担保（UUID 36 文字 / ULID 26 文字より十分小さく安全）と、
+  # DB 列の VARCHAR(255) 上限を意識した境界。
   MIN_LENGTH = 8
   MAX_LENGTH = 255
 
