@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe "Ledger Transfer", type: :request do
-  let!(:system_account) { create(:account, :system_issuance, balance_fuju: -500) }
+  let!(:system_account) { create(:account, :system_issuance) }
   let!(:from_user) { create(:user) }
   let!(:to_user) { create(:user) }
   let!(:idempotency_key) { "transfer-key-12345" }
@@ -25,7 +25,7 @@ RSpec.describe "Ledger Transfer", type: :request do
         expect(response).to have_http_status(:ok)
         expect(from_user.account.reload.balance_fuju).to eq(400)
         expect(to_user.account.reload.balance_fuju).to eq(100)
-        expect(system_account.reload.balance_fuju).to eq(-500)
+        expect(system_account.reload.balance_fuju).to eq(0)
       end
 
       it "レスポンスボディに tx の主要フィールドが含まれる" do
