@@ -23,5 +23,5 @@ create_table "artifacts", force: :cascade do |t|
   t.string "location_url", comment: "location_kind = 'url' の場合に必須"
   t.timestamps
 
-  t.index ["user_id", "created_at"]
+  t.index %w[user_id created_at]
 end
