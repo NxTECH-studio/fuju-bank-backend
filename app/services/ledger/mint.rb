@@ -22,7 +22,7 @@ class Ledger::Mint
   end
 
   def call
-    raise BankError.new(code: "VALIDATION_FAILED", message: "amount must be positive integer") unless positive_integer?(@amount)
+    raise ValidationFailedError.new(message: "amount must be positive integer") unless positive_integer?(@amount)
 
     existing = LedgerTransaction.find_by(idempotency_key: @idempotency_key)
     return existing if existing

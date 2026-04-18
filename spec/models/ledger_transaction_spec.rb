@@ -2,9 +2,10 @@ require "rails_helper"
 
 RSpec.describe LedgerTransaction, type: :model do
   def build_tx(kind: "mint", artifact: nil, amounts: [1, -1], **attrs)
-    tx_attrs = { kind: kind, occurred_at: Time.current }.merge(attrs)
-    tx_attrs[:artifact] = kind == "mint" ? (artifact || create(:artifact)) : artifact
-    tx = build(:ledger_transaction, **tx_attrs)
+    traits = kind == "transfer" ? [:transfer] : []
+    tx_attrs = attrs.dup
+    tx_attrs[:artifact] = artifact || create(:artifact) if kind == "mint"
+    tx = build(:ledger_transaction, *traits, **tx_attrs)
     amounts.each do |amount|
       account = amount.negative? ? create(:account, :system_issuance) : create(:user).account
       tx.entries.build(account: account, amount: amount)
@@ -49,7 +50,8 @@ RSpec.describe LedgerTransaction, type: :model do
     end
 
     it "kind=transfer で artifact_id がある場合は invalid" do
-      tx = build_tx(kind: "transfer", artifact: create(:artifact))
+      tx = build_tx(kind: "transfer")
+      tx.artifact = create(:artifact)
       expect(tx).not_to be_valid
       expect(tx.errors[:artifact_id]).to be_present
     end

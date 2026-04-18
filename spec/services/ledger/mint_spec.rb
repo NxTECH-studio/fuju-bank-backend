@@ -9,15 +9,19 @@ RSpec.describe Ledger::Mint do
   let!(:metadata) { { dwell_seconds: 42 } }
   let!(:occurred_at) { Time.current }
 
-  def call!(overrides = {})
-    described_class.call(
-      artifact: overrides.fetch(:artifact, artifact),
-      user: overrides.fetch(:user, user),
-      amount: overrides.fetch(:amount, amount),
-      idempotency_key: overrides.fetch(:idempotency_key, idempotency_key),
-      metadata: overrides.fetch(:metadata, metadata),
-      occurred_at: overrides.fetch(:occurred_at, occurred_at),
-    )
+  def default_params
+    {
+      artifact: artifact,
+      user: user,
+      amount: amount,
+      idempotency_key: idempotency_key,
+      metadata: metadata,
+      occurred_at: occurred_at,
+    }
+  end
+
+  def call!(**overrides)
+    described_class.call(**default_params, **overrides)
   end
 
   describe ".call" do
@@ -86,23 +90,19 @@ RSpec.describe Ledger::Mint do
     end
 
     context "異常系" do
-      it "amount=0 は BankError(VALIDATION_FAILED) を raise" do
-        expect { call!(amount: 0) }.to raise_error(BankError) { |e| expect(e.code).to eq("VALIDATION_FAILED") }
-      end
-
-      it "amount が負値は BankError(VALIDATION_FAILED) を raise" do
-        expect { call!(amount: -10) }.to raise_error(BankError) { |e| expect(e.code).to eq("VALIDATION_FAILED") }
-      end
-
-      it "amount が非整数は BankError(VALIDATION_FAILED) を raise" do
-        expect { call!(amount: 1.5) }.to raise_error(BankError) { |e| expect(e.code).to eq("VALIDATION_FAILED") }
+      [0, -10, 1.5].each do |bad_amount|
+        it "amount=#{bad_amount} は ValidationFailedError を raise" do
+          expect { call!(amount: bad_amount) }.to raise_error(ValidationFailedError) do |e|
+            expect(e.code).to eq("VALIDATION_FAILED")
+          end
+        end
       end
 
       it "バリデーションエラー時は LedgerTransaction が保存されない" do
         expect do
           call!(amount: 0)
         rescue BankError
-          # 期待通り
+          nil
         end.not_to(change { LedgerTransaction.count })
       end
     end
