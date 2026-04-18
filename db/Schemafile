@@ -1,5 +1,83 @@
 # frozen_string_literal: true
 
 # Ridgepole schema definition
-# Add table definitions here or require separate files:
-#   require "tables/users.rb"
+#
+# テーブル定義はこのファイルに直接 create_table を並べる（フラット運用）。
+# MVP 規模のためサブファイル分割は行わない。複雑化してきたら `db/schema/*.rb` に分割する方針へ移行する。
+#
+# FK 依存があるテーブルは参照先を先に書くこと（例: users → accounts → ledger_transactions → ledger_entries）。
+# 反映コマンドは `make db/schema/apply`（dev + test 両環境に適用）。
+
+create_table "users", force: :cascade do |t|
+  t.string "name", null: false
+  t.string "public_key", comment: "HUD 接続時の署名検証用。MVP では未使用"
+  t.timestamps
+
+  t.index ["name"]
+end
+
+create_table "artifacts", force: :cascade do |t|
+  t.references "user", null: false, foreign_key: true, comment: "作者 User"
+  t.string "title", null: false
+  t.string "location_kind", null: false, comment: "physical / url"
+  t.string "location_url", comment: "location_kind = 'url' の場合に必須"
+  t.timestamps
+
+  t.index %w[user_id created_at]
+end
+
+create_table "accounts", force: :cascade do |t|
+  t.references "user", foreign_key: true, index: false, comment: "kind = 'user' のときに必須（部分ユニークインデックスで担保）"
+  t.string "kind", null: false, comment: "system_issuance / user"
+  t.bigint "balance_fuju", null: false, default: 0, comment: "残高キャッシュ（entries SUM と一致させる）"
+  t.timestamps
+
+  t.index %w[kind]
+  t.index %w[user_id], unique: true, where: "user_id IS NOT NULL",
+                       name: "index_accounts_on_user_id_unique_when_present"
+end
+
+# CHECK 制約: User 口座は残高が負になってはいけない（system_issuance は発行原資なので負値 OK）
+execute <<~SQL.squish
+  ALTER TABLE accounts
+    DROP CONSTRAINT IF EXISTS balance_non_negative_for_user
+SQL
+execute <<~SQL.squish
+  ALTER TABLE accounts
+    ADD CONSTRAINT balance_non_negative_for_user
+    CHECK (kind <> 'user' OR balance_fuju >= 0)
+SQL
+
+create_table "ledger_transactions", force: :cascade do |t|
+  t.string "kind", null: false, comment: "mint / transfer"
+  t.string "idempotency_key", null: false
+  t.references "artifact", foreign_key: true, comment: "mint のとき必須、transfer は NULL"
+  t.string "memo", comment: "表示用の任意メモ"
+  t.jsonb "metadata", null: false, default: {}, comment: "滞留秒数・視線強度など kind 別の文脈情報"
+  t.datetime "occurred_at", null: false, comment: "マイニング層での観測時刻"
+  t.timestamps
+
+  t.index %w[idempotency_key], unique: true
+  t.index %w[kind created_at]
+  t.index %w[artifact_id created_at]
+end
+
+create_table "ledger_entries", force: :cascade do |t|
+  t.references "ledger_transaction", null: false, foreign_key: true
+  t.references "account", null: false, foreign_key: true, index: false, comment: "account_id 単独の index は (account_id, created_at) で代替するため抑止"
+  t.bigint "amount", null: false, comment: "借方=正 / 貸方=負。SUM(amount) per transaction = 0"
+  t.timestamps
+
+  t.index %w[account_id created_at]
+end
+
+# CHECK 制約: amount が 0 の entry は意味を持たないため禁止
+execute <<~SQL.squish
+  ALTER TABLE ledger_entries
+    DROP CONSTRAINT IF EXISTS amount_non_zero
+SQL
+execute <<~SQL.squish
+  ALTER TABLE ledger_entries
+    ADD CONSTRAINT amount_non_zero
+    CHECK (amount <> 0)
+SQL

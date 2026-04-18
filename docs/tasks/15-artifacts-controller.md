@@ -48,13 +48,13 @@ Artifact 登録・参照 API を実装する。
      private
 
      def artifact_params
-       params.expect(artifact: [:artist_id, :title, :location_kind, :location_url])
+       params.expect(artifact: [:user_id, :title, :location_kind, :location_url])
      end
 
      def serialize(artifact)
        {
          id: artifact.id,
-         artist_id: artifact.artist_id,
+         user_id: artifact.user_id,
          title: artifact.title,
          location_kind: artifact.location_kind,
          location_url: artifact.location_url,
@@ -71,14 +71,14 @@ Artifact 登録・参照 API を実装する。
 ## テスト要件
 
 - POST 正常系（physical / url 両方）
-- POST 異常系: `location_kind` 不正、`artist_id` 不存在
+- POST 異常系: `location_kind` 不正、`user_id` 不存在
 - GET 正常系 / 404
 
 ## 技術的な補足
 
-- `belongs_to :artist` により `artist_id` 未指定 or 不存在は validation で捕捉される。
-  Rails 標準では `artist_id` 不存在は `ActiveRecord::InvalidForeignKey` になるため、
-  コントローラ側で `Artist.find(params[:artifact][:artist_id])` を先に呼んでおくと整ったエラーになる（MVP は標準挙動で許容）。
+- `belongs_to :user` により `user_id` 未指定 or 不存在は validation で捕捉される。
+  Rails 標準では `user_id` 不存在は `ActiveRecord::InvalidForeignKey` になるため、
+  コントローラ側で `User.find(params[:artifact][:user_id])` を先に呼んでおくと整ったエラーになる（MVP は標準挙動で許容）。
 
 ## 非スコープ
 

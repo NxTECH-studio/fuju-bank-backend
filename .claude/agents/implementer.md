@@ -12,7 +12,20 @@
 - **Glob/Grep**: ファイル・コード検索
 - **TaskCreate/TaskUpdate**: タスク管理（必須）
 
+## 実行コマンドの選び方
+
+通常は `make` 経由（`make rspec` / `make rubocop` / `make db/schema/apply`。中身は `docker compose exec web ...`）。
+Docker が起動できない / web イメージ未ビルド等で `make` が使えない場合は、ホスト側で `bundle exec` を直接叩いてフォールバックして良い。
+その場合 DB が必要なコマンドは `docker compose up -d db` で db コンテナだけ立て、`DB_HOST=127.0.0.1 DB_USERNAME=fuju_bank_backend DB_PASSWORD=password` を付けて実行する。
+
 ## Workflow（テスト設計先行型）
+
+### 0. feature ブランチの用意（必須）
+実装に着手する前に、`develop` から `feat/xxx` ブランチを切ってチェックアウトする。
+現在ブランチが `develop` / `main` の場合は**必ず**ブランチを切り替えてからコミットを始めること（develop 直打ちは禁止）。
+```bash
+git switch -c feat/<task-slug>
+```
 
 ### 1. ドキュメント読み込み
 **入力**: 実装方針ドキュメントのパス
