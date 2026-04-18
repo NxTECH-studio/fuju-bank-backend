@@ -15,3 +15,13 @@ create_table "users", force: :cascade do |t|
 
   t.index ["name"]
 end
+
+create_table "artifacts", force: :cascade do |t|
+  t.references "user", null: false, foreign_key: true, comment: "作者 User"
+  t.string "title", null: false
+  t.string "location_kind", null: false, comment: "physical / url"
+  t.string "location_url", comment: "location_kind = 'url' の場合に必須"
+  t.timestamps
+
+  t.index %w[user_id created_at]
+end
