@@ -66,6 +66,29 @@ RSpec.describe "Ledger Mint", type: :request do
         expect(response).to have_http_status(:ok)
         expect(LedgerTransaction.last.occurred_at).to eq(Time.zone.parse(iso))
       end
+
+      it "occurred_at が空文字列の場合は Time.current にフォールバックする" do
+        travel_to Time.zone.local(2026, 4, 18, 9, 0, 0) do
+          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 10, occurred_at: "" })
+
+          expect(response).to have_http_status(:ok)
+          expect(LedgerTransaction.last.occurred_at).to eq(Time.current)
+        end
+      end
+
+      it "metadata 未指定の場合は空 Hash が保存される" do
+        post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 10 })
+
+        expect(response).to have_http_status(:ok)
+        expect(LedgerTransaction.last.metadata).to eq({})
+      end
+
+      it "amount が文字列 '100' として渡されても 100 ふじゅ〜として記帳される" do
+        post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: "100" })
+
+        expect(response).to have_http_status(:ok)
+        expect(user.account.reload.balance_fuju).to eq(100)
+      end
     end
 
     context "冪等性" do
