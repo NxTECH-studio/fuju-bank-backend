@@ -12,6 +12,7 @@ Rails.application.routes.draw do
   resources :artifacts, only: %i[create show]
 
   post "ledger/mint", to: "ledger#mint"
+  post "ledger/transfer", to: "ledger#transfer"
 
   # Defines the root path route ("/")
   # root "posts#index"

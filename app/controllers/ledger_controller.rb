@@ -18,6 +18,23 @@ class LedgerController < ApplicationController
     render(json: serialize_transaction(tx), status: :ok)
   end
 
+  def transfer
+    from_user = User.find(transfer_params[:from_user_id])
+    to_user = User.find(transfer_params[:to_user_id])
+
+    tx = Ledger::Transfer.call(
+      from_user: from_user,
+      to_user: to_user,
+      amount: transfer_params[:amount].to_i,
+      idempotency_key: idempotency_key!,
+      memo: transfer_params[:memo],
+      metadata: transfer_params[:metadata].to_h,
+      occurred_at: parse_occurred_at(transfer_params[:occurred_at]),
+    )
+
+    render(json: serialize_transaction(tx), status: :ok)
+  end
+
   private
 
   def mint_params
@@ -26,6 +43,19 @@ class LedgerController < ApplicationController
         :artifact_id,
         :user_id,
         :amount,
+        :occurred_at,
+        { metadata: {} },
+      ],
+    )
+  end
+
+  def transfer_params
+    @transfer_params ||= params.expect(
+      ledger: [
+        :from_user_id,
+        :to_user_id,
+        :amount,
+        :memo,
         :occurred_at,
         { metadata: {} },
       ],
@@ -42,6 +72,7 @@ class LedgerController < ApplicationController
       kind: transaction.kind,
       artifact_id: transaction.artifact_id,
       idempotency_key: transaction.idempotency_key,
+      memo: transaction.memo,
       metadata: transaction.metadata,
       occurred_at: transaction.occurred_at.iso8601,
       created_at: transaction.created_at.iso8601,
