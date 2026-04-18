@@ -1,4 +1,9 @@
 class UsersController < ApplicationController
+  def show
+    user = User.includes(:account).find(params[:id])
+    render(json: serialize_user(user))
+  end
+
   def create
     user = User.create!(user_params)
     render(json: serialize_user(user), status: :created)
