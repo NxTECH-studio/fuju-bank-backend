@@ -10,8 +10,8 @@ module Idempotent
 
   def idempotency_key!
     key = request.headers[IDEMPOTENCY_HEADER].presence || params[:idempotency_key].presence
-    raise BankError.new(code: "VALIDATION_FAILED", message: "Idempotency-Key is required", http_status: :bad_request) if key.blank?
-    raise BankError.new(code: "VALIDATION_FAILED", message: "Idempotency-Key length invalid", http_status: :bad_request) unless valid_length?(key)
+    raise ValidationFailedError.new(message: "Idempotency-Key is required") if key.blank?
+    raise ValidationFailedError.new(message: "Idempotency-Key length invalid") unless valid_length?(key)
 
     key
   end
