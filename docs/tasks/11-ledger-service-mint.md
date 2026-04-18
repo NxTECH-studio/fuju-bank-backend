@@ -5,7 +5,7 @@
 ## 概要
 
 ふじゅ〜の発行（mint）を処理する Service Object を実装する。
-`Artifact` → `Artist` への N ふじゅ〜発行を、複式簿記（system_issuance -N / artist +N）として記帳し、
+`Artifact` → `User` への N ふじゅ〜発行を、複式簿記（system_issuance -N / user +N）として記帳し、
 同一トランザクションで残高キャッシュを更新する。
 
 ## 背景・目的
@@ -89,10 +89,10 @@ end
 
 ```ruby
 # app/services/ledger/mint.rb
-# ふじゅ〜の発行。system_issuance 口座から Artist 口座へ amount だけ移動する。
+# ふじゅ〜の発行。system_issuance 口座から User 口座へ amount だけ移動する。
 class Ledger::Mint
   # @param artifact [Artifact]
-  # @param artist [Artist]
+  # @param user [User]
   # @param amount [Integer] 正の整数
   # @param idempotency_key [String]
   # @param metadata [Hash] 滞留秒数などの文脈
@@ -101,9 +101,9 @@ class Ledger::Mint
     new(**kwargs).call
   end
 
-  def initialize(artifact:, artist:, amount:, idempotency_key:, metadata: {}, occurred_at: Time.current)
+  def initialize(artifact:, user:, amount:, idempotency_key:, metadata: {}, occurred_at: Time.current)
     @artifact = artifact
-    @artist = artist
+    @user = user
     @amount = amount
     @idempotency_key = idempotency_key
     @metadata = metadata
@@ -125,13 +125,13 @@ class Ledger::Mint
         occurred_at: @occurred_at,
       )
       tx.entries.build(account: Account.system_issuance!, amount: -@amount)
-      tx.entries.build(account: @artist.account, amount: @amount)
+      tx.entries.build(account: @user.account, amount: @amount)
       tx.save!
 
       Account.system_issuance!.lock!.tap do |acc|
         acc.update!(balance_fuju: acc.balance_fuju - @amount)
       end
-      @artist.account.lock!.tap do |acc|
+      @user.account.lock!.tap do |acc|
         acc.update!(balance_fuju: acc.balance_fuju + @amount)
       end
 
@@ -177,7 +177,7 @@ end
 ## テスト要件
 
 - `spec/services/ledger/mint_spec.rb`
-  - 正常系: mint すると `artist.account.balance_fuju` が N 増える
+  - 正常系: mint すると `user.account.balance_fuju` が N 増える
   - 正常系: `system_issuance` 残高が N 減る（負の値 OK）
   - 正常系: `LedgerTransaction` が 1 件作成され、`entries.count == 2`、`entries.sum(:amount) == 0`
   - 冪等性: 同一 `idempotency_key` を 2 回呼ぶと作成は 1 回だけ、返り値は既存トランザクション

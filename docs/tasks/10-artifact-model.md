@@ -33,7 +33,7 @@
    class Artifact < ApplicationRecord
      LOCATION_KINDS = %w[physical url].freeze
 
-     belongs_to :artist
+     belongs_to :user
      has_many :ledger_transactions, dependent: :restrict_with_exception
 
      validates :title, presence: true
@@ -55,7 +55,7 @@
    # spec/factories/artifacts.rb
    FactoryBot.define do
      factory :artifact do
-       artist
+       user
        sequence(:title) { |n| "Artifact #{n}" }
        location_kind { "physical" }
        location_url { nil }
@@ -78,13 +78,13 @@
 ## テスト要件
 
 - 上記 validation パターンの正常系・異常系
-- `artist` との関連が機能する（`artifact.artist == artist`）
+- `user` との関連が機能する（`artifact.user == user`）
 - `LedgerTransaction` が未実装のため `has_many :ledger_transactions` のテストは #11 で
 
 ## 技術的な補足
 
 - `location_url` は URL 形式 validation（`URI` parse）を **入れない**。MVP では「空でなければ OK」。将来のタスクで規約を固めたら strict に。
-- `belongs_to :artist` は Rails 5 以降 default required なので明示不要。
+- `belongs_to :user` は Rails 5 以降 default required なので明示不要。
 - `LedgerTransaction` モデルはこの時点で未定義のため、`has_many :ledger_transactions` は文字列として解決されることを想定。未実装でも Rails は起動する。
 
 ## 非スコープ

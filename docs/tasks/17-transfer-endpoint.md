@@ -4,11 +4,11 @@
 
 ## 概要
 
-Artist → Artist 送金 API。PayPay 的なユーザー間送金を提供する。
+User → User 送金 API。PayPay 的なユーザー間送金を提供する。
 
 ## 背景・目的
 
-- Artist 同士でふじゅ〜をやり取りできると、作家コミュニティ内の価値循環が生まれる。
+- User 同士でふじゅ〜をやり取りできると、作家コミュニティ内の価値循環が生まれる。
 - べき等性は mint と同じ考え方で `Idempotency-Key` を必須にする。
 
 ## 影響範囲
@@ -33,12 +33,12 @@ Artist → Artist 送金 API。PayPay 的なユーザー間送金を提供する
 2. コントローラに `transfer` アクション追加
    ```ruby
    def transfer
-     from_artist = Artist.find(transfer_params[:from_artist_id])
-     to_artist = Artist.find(transfer_params[:to_artist_id])
+     from_user = User.find(transfer_params[:from_user_id])
+     to_user = User.find(transfer_params[:to_user_id])
 
      tx = Ledger::Transfer.call(
-       from_artist: from_artist,
-       to_artist: to_artist,
+       from_user: from_user,
+       to_user: to_user,
        amount: transfer_params[:amount].to_i,
        idempotency_key: idempotency_key!,
        memo: transfer_params[:memo],
@@ -52,13 +52,13 @@ Artist → Artist 送金 API。PayPay 的なユーザー間送金を提供する
    private
 
    def transfer_params
-     params.expect(ledger: [:from_artist_id, :to_artist_id, :amount, :memo, :occurred_at, metadata: {},])
+     params.expect(ledger: [:from_user_id, :to_user_id, :amount, :memo, :occurred_at, metadata: {},])
    end
    ```
 3. Request spec
    - 正常系: A→B に N、残高が正しく変化
    - 異常系: 残高不足 → 422 `INSUFFICIENT_BALANCE`
-   - 異常系: `from_artist_id == to_artist_id` → 422 `VALIDATION_FAILED`
+   - 異常系: `from_user_id == to_user_id` → 422 `VALIDATION_FAILED`
    - 冪等性: 同じ `Idempotency-Key` で 2 回 POST → 作成は 1 回
    - `Idempotency-Key` 未指定 → 400（#03 の concern）
 
