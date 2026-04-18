@@ -6,13 +6,14 @@ class UserTransactionsController < ApplicationController
 
   def index
     user = User.find(params[:user_id])
+    account_id = user.account.id
     entries = LedgerEntry
-      .where(account_id: user.account.id)
-      .includes(ledger_transaction: [:artifact, { entries: :account }])
+      .where(account_id: account_id)
+      .includes(ledger_transaction: { entries: :account })
       .order(id: :desc)
       .limit(resolved_limit)
 
-    render(json: { data: entries.map { |e| serialize(e, user) } })
+    render(json: { data: entries.map { |e| serialize(e, account_id) } })
   end
 
   private
@@ -27,7 +28,7 @@ class UserTransactionsController < ApplicationController
     [value, MAX_LIMIT].min
   end
 
-  def serialize(entry, user)
+  def serialize(entry, account_id)
     tx = entry.ledger_transaction
     {
       entry_id: entry.id,
@@ -36,7 +37,7 @@ class UserTransactionsController < ApplicationController
       direction: entry.amount > 0 ? "credit" : "debit",
       amount: entry.amount.abs,
       artifact_id: tx.artifact_id,
-      counterparty_user_id: counterparty_user_id(tx, user),
+      counterparty_user_id: counterparty_user_id(tx, account_id),
       memo: tx.memo,
       metadata: tx.metadata,
       occurred_at: tx.occurred_at.iso8601,
@@ -44,10 +45,10 @@ class UserTransactionsController < ApplicationController
     }
   end
 
-  def counterparty_user_id(transaction, user)
+  def counterparty_user_id(transaction, account_id)
     return nil unless transaction.transfer_kind?
 
-    other_entry = transaction.entries.find { |e| e.account_id != user.account.id }
+    other_entry = transaction.entries.find { |e| e.account_id != account_id }
     other_entry&.account&.user_id
   end
 end
