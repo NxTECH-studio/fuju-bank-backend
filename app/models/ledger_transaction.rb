@@ -2,6 +2,7 @@
 # kind=mint は Artifact → User の発行、kind=transfer は User → User の送金。
 class LedgerTransaction < ApplicationRecord
   KINDS = %w[mint transfer].freeze
+  MINIMUM_ENTRIES = 2
 
   belongs_to :artifact, optional: true
   has_many :entries,
@@ -35,6 +36,6 @@ class LedgerTransaction < ApplicationRecord
   end
 
   def must_have_at_least_two_entries
-    errors.add(:entries, "must have at least 2 entries") if entries.size < 2
+    errors.add(:entries, "must have at least #{MINIMUM_ENTRIES} entries") if entries.size < MINIMUM_ENTRIES
   end
 end

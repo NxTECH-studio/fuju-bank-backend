@@ -57,6 +57,28 @@ RSpec.describe Ledger::Mint do
         expect(tx).to be_a(LedgerTransaction)
         expect(tx.persisted?).to be true
       end
+
+      it "既存残高に amount が加算される" do
+        user.account.update!(balance_fuju: 50)
+        expect { call! }.to change { user.account.reload.balance_fuju }.from(50).to(50 + amount)
+      end
+
+      it "巨大な amount (bigint 範囲) でも正しく加算される" do
+        big_amount = 10**15
+        expect { call!(amount: big_amount) }.to change { user.account.reload.balance_fuju }.from(0).to(big_amount)
+      end
+
+      it "occurred_at を渡さないと Time.current で保存される" do
+        travel_to Time.zone.local(2026, 4, 18, 10, 0, 0) do
+          tx = described_class.call(
+            artifact: artifact,
+            user: user,
+            amount: amount,
+            idempotency_key: "default-occurred-at-key",
+          )
+          expect(tx.occurred_at).to eq(Time.current)
+        end
+      end
     end
 
     context "冪等性" do
@@ -73,12 +95,8 @@ RSpec.describe Ledger::Mint do
 
       it "ActiveRecord::RecordNotUnique が飛んだ場合は既存 transaction を返す" do
         existing = call!
-        # 1 回目の find_by を nil にして save! 経路へ入らせ、save! は RecordNotUnique を raise、
-        # rescue 後の find_by! が既存を返すことを検証する。
-        allow(LedgerTransaction).to receive(:find_by).and_wrap_original do |_original, *_args|
-          allow(LedgerTransaction).to receive(:find_by).and_call_original
-          nil
-        end
+        # 1 回目の find_by は nil を返して save! 経路へ進ませ、2 回目（rescue 節）で既存を返させる。
+        allow(LedgerTransaction).to receive(:find_by).and_return(nil, existing)
         allow(LedgerTransaction).to receive(:new).and_wrap_original do |original, **kwargs|
           tx = original.call(**kwargs)
           allow(tx).to receive(:save!).and_raise(ActiveRecord::RecordNotUnique.new("dup"))
@@ -87,11 +105,22 @@ RSpec.describe Ledger::Mint do
 
         expect(call!).to eq(existing)
       end
+
+      it "RecordNotUnique が idempotency_key 以外の理由で飛んだ場合は再 raise する" do
+        allow(LedgerTransaction).to receive(:find_by).and_return(nil)
+        allow(LedgerTransaction).to receive(:new).and_wrap_original do |original, **kwargs|
+          tx = original.call(**kwargs)
+          allow(tx).to receive(:save!).and_raise(ActiveRecord::RecordNotUnique.new("other unique"))
+          tx
+        end
+
+        expect { call! }.to raise_error(ActiveRecord::RecordNotUnique)
+      end
     end
 
     context "異常系" do
-      [0, -10, 1.5].each do |bad_amount|
-        it "amount=#{bad_amount} は ValidationFailedError を raise" do
+      [0, -10, 1.5, "100", nil].each do |bad_amount|
+        it "amount=#{bad_amount.inspect} は ValidationFailedError を raise" do
           expect { call!(amount: bad_amount) }.to raise_error(ValidationFailedError) do |e|
             expect(e.code).to eq("VALIDATION_FAILED")
           end

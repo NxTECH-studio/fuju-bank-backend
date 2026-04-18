@@ -48,7 +48,11 @@ class Ledger::Mint
       tx
     end
   rescue ActiveRecord::RecordNotUnique
-    LedgerTransaction.find_by!(idempotency_key: @idempotency_key)
+    # idempotency_key 以外の unique 制約違反まで吸収しないよう、既存が見つからなければ再 raise する。
+    existing = LedgerTransaction.find_by(idempotency_key: @idempotency_key)
+    raise if existing.nil?
+
+    existing
   end
 
   private
