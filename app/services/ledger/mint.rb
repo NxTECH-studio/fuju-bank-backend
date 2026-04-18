@@ -27,7 +27,7 @@ class Ledger::Mint
     existing = LedgerTransaction.find_by(idempotency_key: @idempotency_key)
     return existing if existing
 
-    ActiveRecord::Base.transaction do
+    tx = ActiveRecord::Base.transaction do
       system_account = Account.system_issuance!.lock!
       user_account = @user.account.lock!
 
@@ -47,6 +47,8 @@ class Ledger::Mint
 
       tx
     end
+    Ledger::Notifier.broadcast_credits(tx)
+    tx
   rescue ActiveRecord::RecordNotUnique
     # idempotency_key 以外の unique 制約違反まで吸収しないよう、既存が見つからなければ再 raise する。
     existing = LedgerTransaction.find_by(idempotency_key: @idempotency_key)

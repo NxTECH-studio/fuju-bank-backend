@@ -30,7 +30,7 @@ class Ledger::Transfer
     existing = LedgerTransaction.find_by(idempotency_key: @idempotency_key)
     return existing if existing
 
-    ActiveRecord::Base.transaction do
+    tx = ActiveRecord::Base.transaction do
       # TODO: 本番規模ではデッドロック回避のため account.id 昇順で lock! すること（A→B と B→A の同時送金対策）。
       from_account = @from_user.account.lock!
       to_account = @to_user.account.lock!
@@ -53,6 +53,8 @@ class Ledger::Transfer
 
       tx
     end
+    Ledger::Notifier.broadcast_credits(tx)
+    tx
   rescue ActiveRecord::RecordNotUnique
     # idempotency_key 以外の unique 制約違反まで吸収しないよう、既存が見つからなければ再 raise する。
     existing = LedgerTransaction.find_by(idempotency_key: @idempotency_key)

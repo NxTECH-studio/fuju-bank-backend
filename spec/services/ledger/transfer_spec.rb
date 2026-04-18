@@ -119,6 +119,28 @@ RSpec.describe Ledger::Transfer do
       end
     end
 
+    context "broadcast" do
+      it "受け手 User へ UserChannel 経由で 1 回 broadcast される" do
+        expect { call! }.to have_broadcasted_to(to_user).from_channel(UserChannel).once
+      end
+
+      it "送り手 User へは broadcast されない" do
+        expect { call! }.not_to have_broadcasted_to(from_user).from_channel(UserChannel)
+      end
+
+      it "broadcast が失敗しても記帳は確定する（トランザクション外で実行）" do
+        allow(Ledger::Notifier).to receive(:broadcast_credits).and_raise(StandardError, "broadcast failed")
+
+        expect do
+          call!
+        rescue StandardError
+          nil
+        end.to change { LedgerTransaction.count }.by(1)
+        expect(from_user.account.reload.balance_fuju).to eq(initial_balance - amount)
+        expect(to_user.account.reload.balance_fuju).to eq(amount)
+      end
+    end
+
     context "異常系: 残高不足" do
       it "残高不足なら InsufficientBalanceError を raise" do
         expect { call!(amount: initial_balance + 1) }.to raise_error(InsufficientBalanceError) do |e|
