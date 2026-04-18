@@ -1,5 +1,4 @@
 # 記帳イベントを UserChannel へ broadcast するユーティリティ。
-# 受け手（amount > 0 の entry）の User にのみ credit ペイロードを送る。
 class Ledger::Notifier
   # @param ledger_transaction [LedgerTransaction]
   def self.broadcast_credits(ledger_transaction)

@@ -47,6 +47,7 @@ class Ledger::Mint
 
       tx
     end
+    # broadcast は transaction の外で。Solid Cable の INSERT を本体 rollback に巻き込まないため。
     Ledger::Notifier.broadcast_credits(tx)
     tx
   rescue ActiveRecord::RecordNotUnique
