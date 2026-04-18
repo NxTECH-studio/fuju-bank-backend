@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
 # Ridgepole schema definition
-# Add table definitions here or require separate files:
-#   require "tables/users.rb"
+#
+# テーブル定義はこのファイルに直接 create_table を並べる（フラット運用）。
+# MVP 規模のためサブファイル分割は行わない。複雑化してきたら `db/schema/*.rb` に分割する方針へ移行する。
+#
+# FK 依存があるテーブルは参照先を先に書くこと（例: artists → accounts → ledger_transactions → ledger_entries）。
+# 反映コマンドは `make db/schema/apply`（dev + test 両環境に適用）。
