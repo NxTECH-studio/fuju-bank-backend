@@ -10,7 +10,7 @@ RSpec.describe UserChannel, type: :channel do
   end
 
   it "rejects subscription with unknown user_id" do
-    subscribe(user_id: 999_999)
+    subscribe(user_id: user.id + 1)
     expect(subscription).to be_rejected
   end
 end
