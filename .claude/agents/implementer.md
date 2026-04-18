@@ -169,7 +169,7 @@ let!(:order) { create(:order, :with_photographer, date: Date.current) }
 
 ### 基本ルール
 
-- **let! を使用**: `let` ではなく `let!` で即時作成
+- **let! を使用（例外なし）**: `let` ではなく `let!` を使う。プロジェクトのカスタム cop `RSpec/PreferLetBang` が全ての `let` を対象にしており、スカラー値・遅延評価目的であっても `let!` で統一する。spec を書く時点で例外なく `let!` を使う癖をつける（後から置換・レビュー指摘にならないように）。
 - **必要最小限**: 不要な属性を設定しない
 - **時刻固定**: `Time.current` 使用時は `travel_to` で固定
 - **ダブルクォート**: 文字列リテラルは `"` を使用
