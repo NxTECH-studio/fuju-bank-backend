@@ -52,12 +52,12 @@ create_table "ledger_transactions", force: :cascade do |t|
   t.string "kind", null: false, comment: "mint / transfer"
   t.string "idempotency_key", null: false
   t.references "artifact", foreign_key: true, comment: "mint のとき必須、transfer は NULL"
-  t.string "memo"
-  t.jsonb "metadata", null: false, default: {}
+  t.string "memo", comment: "表示用の任意メモ"
+  t.jsonb "metadata", null: false, default: {}, comment: "滞留秒数・視線強度など kind 別の文脈情報"
   t.datetime "occurred_at", null: false, comment: "マイニング層での観測時刻"
   t.timestamps
 
-  t.index ["idempotency_key"], unique: true
+  t.index %w[idempotency_key], unique: true
   t.index %w[kind created_at]
   t.index %w[artifact_id created_at]
 end
