@@ -28,10 +28,22 @@ RSpec.describe Artifact, type: :model do
       expect(artifact.errors[:location_kind]).to be_present
     end
 
+    it "location_kind が nil のときは invalid" do
+      artifact = build(:artifact, location_kind: nil)
+      expect(artifact).not_to be_valid
+      expect(artifact.errors[:location_kind]).to be_present
+    end
+
     it "title が空のときは invalid" do
       artifact = build(:artifact, title: "")
       expect(artifact).not_to be_valid
       expect(artifact.errors[:title]).to be_present
+    end
+
+    it "user が nil のときは invalid" do
+      artifact = build(:artifact, user: nil)
+      expect(artifact).not_to be_valid
+      expect(artifact.errors[:user]).to be_present
     end
   end
 
