@@ -24,7 +24,7 @@
 
 | エンティティ | 役割 |
 |---|---|
-| **User** | ふじゅ〜の受け取り手。`name` / `public_key`（HUD 接続用、将来の署名検証）/ `external_user_id`（AuthCore の `sub` = ULID）を保持。`after_create` で `Account(kind: "user")` が 1:1 で生える。 |
+| **User** | ふじゅ〜の受け取り手。`name` / `public_key`（HUD 接続用、将来の署名検証）を保持。`after_create` で `Account(kind: "user")` が 1:1 で生える。AuthCore 連携で `external_user_id`（`sub` = ULID）を追加予定（[task 21](./docs/tasks/21-add-external-user-id.md)）。 |
 | **Artifact** | 発行（mint）の起点。物理場所または URL に紐付く。`location_kind` enum (`physical` / `url`)。 |
 | **Account** | 勘定口座。`kind` enum で `system_issuance`（発行源、マイナス残高 OK、`user_id` NULL）と `user`（マイナス残高禁止、CHECK 制約）を区別。`balance_fuju` は `ledger_entries.amount` の SUM キャッシュ。 |
 | **LedgerTransaction** | 1 回の記帳イベント。`kind`（`mint` / `transfer`）、`idempotency_key`（ユニーク）、`metadata` JSONB（滞留秒数 / 視線強度 等）、`occurred_at`（クライアント時刻）。 |
@@ -113,7 +113,8 @@ transfer (User → User):
   "transaction_kind": "mint",
   "artifact_id": 7,
   "from_user_id": null,
-  "metadata": { "dwell_seconds": 12, "gaze_strength": 0.8 }
+  "metadata": { "dwell_seconds": 12, "gaze_strength": 0.8 },
+  "occurred_at": "2026-04-18T12:34:56Z"
 }
 ```
 
