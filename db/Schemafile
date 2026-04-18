@@ -27,7 +27,7 @@ create_table "artifacts", force: :cascade do |t|
 end
 
 create_table "accounts", force: :cascade do |t|
-  t.references "user", foreign_key: true, comment: "kind = 'user' のときに必須"
+  t.references "user", foreign_key: true, index: false, comment: "kind = 'user' のときに必須（部分ユニークインデックスで担保）"
   t.string "kind", null: false, comment: "system_issuance / user"
   t.bigint "balance_fuju", null: false, default: 0, comment: "残高キャッシュ（entries SUM と一致させる）"
   t.timestamps
