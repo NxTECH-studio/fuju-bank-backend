@@ -75,7 +75,7 @@ transfer (User → User):
 `POST /ledger/mint` と `POST /ledger/transfer` は **`Idempotency-Key` ヘッダ
 （または body の `idempotency_key`）必須**。`ledger_transactions.idempotency_key`
 にユニーク制約があり、同一キーの重複受信は既存トランザクションをそのまま返します
-（HTTP 200）。同一キーで payload が異なる場合は `409 IDEMPOTENCY_CONFLICT`。
+（HTTP 200）。
 
 ### 統一エラーレスポンス
 
@@ -90,11 +90,10 @@ transfer (User → User):
 
 | `error.code` | HTTP | 用途 |
 |---|---|---|
-| `VALIDATION_FAILED` | 422 | バリデーション失敗 |
+| `VALIDATION_FAILED` | 400 | バリデーション失敗 |
 | `NOT_FOUND` | 404 | リソース不在 |
 | `INSUFFICIENT_BALANCE` | 422 | 送金時の残高不足 |
-| `IDEMPOTENCY_CONFLICT` | 409 | 同一 `idempotency_key` で異なる payload |
-| `AUTHENTICATION_REQUIRED` | 401 | JWT 無効 / 欠落 |
+| `UNAUTHENTICATED` | 401 | JWT 無効 / 欠落 |
 | `TOKEN_INACTIVE` | 401 | introspection で `active=false`（revoke 済み） |
 | `AUTHCORE_UNAVAILABLE` | 503 | AuthCore への問い合わせが 5xx / タイムアウト |
 | `MFA_REQUIRED` | 403 | MFA 未検証トークンで `MfaRequired` 適用 action を叩いた |
