@@ -1,5 +1,8 @@
-# TODO: 認証は将来拡張（マイニング層からの署名検証など）
+# 金銭移動系エンドポイント（mint / transfer）。
+# ローカル JWT 検証に加えて AuthCore introspection を要求する。
+# MFA 要否は MVP 時点では未決定。必要になった時点で `include MfaRequired` を追加する。
 class LedgerController < ApplicationController
+  include IntrospectionRequired
   include Idempotent
 
   def mint
