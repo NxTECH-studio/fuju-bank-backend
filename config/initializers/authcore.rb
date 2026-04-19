@@ -17,4 +17,16 @@ module Authcore
   def expected_issuer
     @expected_issuer ||= ENV.fetch("AUTHCORE_EXPECTED_ISSUER", "authcore")
   end
+
+  def base_url
+    ENV.fetch("AUTHCORE_BASE_URL")
+  end
+
+  def client_id
+    ENV.fetch("AUTHCORE_CLIENT_ID")
+  end
+
+  def client_secret
+    ENV.fetch("AUTHCORE_CLIENT_SECRET")
+  end
 end
