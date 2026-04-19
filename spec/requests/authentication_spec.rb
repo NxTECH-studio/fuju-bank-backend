@@ -80,5 +80,34 @@ RSpec.describe "Authentication", :skip_default_auth, type: :request do
 
       it_behaves_like "401 UNAUTHENTICATED"
     end
+
+    context "alg=none（署名なし）" do
+      let!(:headers) do
+        payload = { sub: sub, type: "access", aud: "authcore", iss: "authcore", exp: 5.minutes.from_now.to_i }
+        { "Authorization" => "Bearer #{JWT.encode(payload, nil, 'none')}" }
+      end
+
+      it_behaves_like "401 UNAUTHENTICATED"
+    end
+
+    # alg=RS256 期待の検証器に、公開鍵を HMAC キーとして署名した alg=HS256 JWT を渡す古典攻撃。
+    context "alg=HS256 で公開鍵を HMAC キーに使った confused deputy 攻撃" do
+      let!(:headers) do
+        payload = { sub: sub, type: "access", aud: "authcore", iss: "authcore", exp: 5.minutes.from_now.to_i }
+        token = JWT.encode(payload, TestKeypair.public_key_pem, "HS256")
+        { "Authorization" => "Bearer #{token}" }
+      end
+
+      it_behaves_like "401 UNAUTHENTICATED"
+    end
+
+    context "sub クレームが欠落" do
+      let!(:headers) do
+        payload = { type: "access", aud: "authcore", iss: "authcore", exp: 5.minutes.from_now.to_i }
+        { "Authorization" => "Bearer #{JWT.encode(payload, test_private_key, 'RS256')}" }
+      end
+
+      it_behaves_like "401 UNAUTHENTICATED"
+    end
   end
 end

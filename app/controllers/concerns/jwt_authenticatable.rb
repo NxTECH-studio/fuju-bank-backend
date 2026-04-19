@@ -45,13 +45,14 @@ module JwtAuthenticatable
         verify_iss: true,
         iss: Authcore.expected_issuer,
         verify_expiration: true,
+        required_claims: ["sub"],
       },
     )
 
     raise AuthenticationError.new(message: "access token 以外は許可されていません") unless payload["type"] == "access"
 
     payload
-  rescue JWT::DecodeError, JWT::ExpiredSignature, JWT::InvalidAudError, JWT::InvalidIssuerError
+  rescue JWT::DecodeError, JWT::ExpiredSignature, JWT::InvalidAudError, JWT::InvalidIssuerError, JWT::MissingRequiredClaim
     raise AuthenticationError
   end
 end
