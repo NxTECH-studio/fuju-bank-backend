@@ -12,7 +12,7 @@ class UsersController < ApplicationController
   private
 
   def user_params
-    params.expect(user: %i[name public_key])
+    params.expect(user: %i[external_user_id name public_key])
   end
 
   def serialize_user(user)
