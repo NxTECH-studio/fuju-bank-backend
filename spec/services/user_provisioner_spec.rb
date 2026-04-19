@@ -51,11 +51,15 @@ RSpec.describe UserProvisioner do
       end
 
       it "bootstrap_account! が失敗した場合、User も作成されない" do
-        allow_any_instance_of(User).to receive(:bootstrap_account!).and_raise(ActiveRecord::RecordInvalid)
+        allow(User).to receive(:new).and_wrap_original do |original, **kwargs|
+          user = original.call(**kwargs)
+          allow(user).to receive(:bootstrap_account!).and_raise(StandardError, "account boom")
+          user
+        end
 
         expect do
           described_class.call(external_user_id: external_user_id)
-        rescue ActiveRecord::RecordInvalid
+        rescue StandardError
           nil
         end.not_to(change { User.count })
       end
@@ -65,16 +69,9 @@ RSpec.describe UserProvisioner do
       it "RecordNotUnique を rescue して再 find し、既存 User を返す" do
         concurrent_user = create(:user, external_user_id: external_user_id)
 
-        call_count = 0
-        allow(User).to receive(:find_by).and_wrap_original do |original, *args|
-          call_count += 1
-          # 1 回目の find_by は nil を返して create! 経路へ進ませる
-          call_count == 1 ? nil : original.call(*args)
-        end
+        # 1 回目の find_by は nil（create! 経路へ）、2 回目（rescue 後の find_by! 経由）は既存を返す
+        allow(User).to receive(:find_by).and_return(nil, concurrent_user)
         allow(User).to receive(:create!).and_raise(ActiveRecord::RecordNotUnique.new("dup"))
-        allow(User).to receive(:find_by!).and_wrap_original do |original, *args|
-          original.call(*args)
-        end
 
         expect(described_class.call(external_user_id: external_user_id)).to eq(concurrent_user)
       end

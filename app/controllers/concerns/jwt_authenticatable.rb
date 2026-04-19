@@ -25,8 +25,7 @@ module JwtAuthenticatable
     @current_external_user_id
   end
 
-  # 参照されたタイミングで lazy に User をプロビジョニングする。
-  # 呼ばれないコントローラでは DB ヒットしない。
+  # 呼ばれないコントローラでは DB ヒットしないよう lazy 評価する。
   def current_user
     @current_user ||= UserProvisioner.call(external_user_id: current_external_user_id)
   end

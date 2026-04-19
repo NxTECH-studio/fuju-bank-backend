@@ -19,7 +19,6 @@ class UserProvisioner
     ApplicationRecord.transaction do
       User.create!(external_user_id: @external_user_id, name: nil)
     end
-    User.find_by!(external_user_id: @external_user_id)
   rescue ActiveRecord::RecordNotUnique
     # 並行リクエストで同一 sub の User が別トランザクションで先に作られたケース
     User.find_by!(external_user_id: @external_user_id)
