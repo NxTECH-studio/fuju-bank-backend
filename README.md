@@ -24,7 +24,7 @@
 
 | エンティティ | 役割 |
 |---|---|
-| **User** | ふじゅ〜の受け取り手。`name` / `public_key`（HUD 接続用、将来の署名検証）を保持。`after_create` で `Account(kind: "user")` が 1:1 で生える。AuthCore 連携で `external_user_id`（`sub` = ULID）を追加予定（[task 21](./docs/tasks/21-add-external-user-id.md)）。 |
+| **User** | ふじゅ〜の受け取り手。`name` / `public_key`（HUD 接続用、将来の署名検証）を保持。`after_create` で `Account(kind: "user")` が 1:1 で生える。AuthCore の `sub`（ULID）を `external_user_id` に保存（認証セクション参照）。 |
 | **Artifact** | 発行（mint）の起点。物理場所または URL に紐付く。`location_kind` enum (`physical` / `url`)。 |
 | **Account** | 勘定口座。`kind` enum で `system_issuance`（発行源、マイナス残高 OK、`user_id` NULL）と `user`（マイナス残高禁止、CHECK 制約）を区別。`balance_fuju` は `ledger_entries.amount` の SUM キャッシュ。 |
 | **LedgerTransaction** | 1 回の記帳イベント。`kind`（`mint` / `transfer`）、`idempotency_key`（ユニーク）、`metadata` JSONB（滞留秒数 / 視線強度 等）、`occurred_at`（クライアント時刻）。 |
@@ -60,7 +60,7 @@ transfer (User → User):
 
 | Method | Path | 用途 | 認証 |
 |---|---|---|---|
-| `POST` | `/users` | User 作成 | （AuthCore 適用予定） |
+| `POST` | `/users` | User 作成 | ローカル JWT |
 | `GET` | `/users/:id` | User 情報 + 残高取得 | ローカル JWT |
 | `GET` | `/users/:id/transactions` | 取引履歴（mint / transfer 統合） | ローカル JWT |
 | `POST` | `/artifacts` | Artifact 作成 | ローカル JWT |
@@ -68,8 +68,7 @@ transfer (User → User):
 | `POST` | `/ledger/mint` | 発行（マイニング層から） | ローカル JWT + introspection |
 | `POST` | `/ledger/transfer` | 送金（User → User） | ローカル JWT + introspection |
 
-> 認証ポリシーの最終形は AuthCore 連携完了後に確定します。詳細は
-> [認証（AuthCore 連携）](#認証authcore-連携)を参照。
+> 認証ポリシーの詳細は [認証（AuthCore 連携）](#認証authcore-連携) を参照。
 
 ### べき等性
 
@@ -95,6 +94,10 @@ transfer (User → User):
 | `NOT_FOUND` | 404 | リソース不在 |
 | `INSUFFICIENT_BALANCE` | 422 | 送金時の残高不足 |
 | `IDEMPOTENCY_CONFLICT` | 409 | 同一 `idempotency_key` で異なる payload |
+| `AUTHENTICATION_REQUIRED` | 401 | JWT 無効 / 欠落 |
+| `TOKEN_INACTIVE` | 401 | introspection で `active=false`（revoke 済み） |
+| `AUTHCORE_UNAVAILABLE` | 503 | AuthCore への問い合わせが 5xx / タイムアウト |
+| `MFA_REQUIRED` | 403 | MFA 未検証トークンで `MfaRequired` 適用 action を叩いた |
 | `INTERNAL_ERROR` | 500 | 想定外エラー |
 
 ## リアルタイム配信（ActionCable / UserChannel）
@@ -124,16 +127,31 @@ transfer (User → User):
 ## 認証（AuthCore 連携）
 
 認証基盤は別リポジトリの **AuthCore**（JWT RS256 + introspection 併用）。
-銀行側 User は AuthCore の `sub`（ULID）を `external_user_id` で同定し、
-lazy プロビジョニングで自動生成する方針です。
+銀行側 `User` は AuthCore の `sub`（ULID, 26 文字）を `users.external_user_id` で同定します。
 
-実装方針（進行中）:
+### 方針の要点
 
-- [docs/tasks/21-add-external-user-id.md](./docs/tasks/21-add-external-user-id.md) — `users.external_user_id` 追加 + `name` nullable 化
-- [docs/tasks/22-jwt-auth-middleware.md](./docs/tasks/22-jwt-auth-middleware.md) — JWT 検証 concern（ローカル検証のみ）
-- [docs/tasks/23-lazy-user-provisioning.md](./docs/tasks/23-lazy-user-provisioning.md) — lazy user プロビジョニング
-- [docs/tasks/24-authcore-introspection-client.md](./docs/tasks/24-authcore-introspection-client.md) — AuthCore introspection クライアント
-- [docs/tasks/25-auth-policy-application.md](./docs/tasks/25-auth-policy-application.md) — 認証ポリシー適用（参照系=ローカル / 金銭移動系=introspection）
+- **ユーザー同定**: `users.external_user_id`（NOT NULL, unique, limit 26）に AuthCore の `sub` を保存。
+  `users.name` は lazy プロビジョニング時点では NULL 可（HUD からの後続 PATCH で埋める想定）。
+- **JWT ローカル検証**: `Authorization: Bearer <jwt>` を `JwtAuthenticatable` concern で検証。
+  署名（RS256, `AUTHCORE_JWT_PUBLIC_KEY`）、`exp`、`type=access`、`aud`、`iss` を確認し、
+  `current_external_user_id` / `current_user` をコントローラに供給します。
+- **Lazy プロビジョニング**: JWT 検証成功時、`sub` に対応する `User` が無ければ
+  `UserProvisioner` が `User` + `Account(kind: "user")` をその場で作成します（`after_create` フック経由）。
+  並行リクエストによる重複は `ActiveRecord::RecordNotUnique` rescue で吸収します。
+- **Introspection（金銭移動系のみ）**: `POST /ledger/mint` / `POST /ledger/transfer` には
+  `IntrospectionRequired` concern を適用し、AuthCore の `POST /v1/auth/introspect` を毎回呼んで
+  `active=true` を確認します。revoke 済みトークンは 401、AuthCore 不達は 503 + `AUTHCORE_UNAVAILABLE`。
+- **MFA ゲート**: `MfaRequired` concern を用意済み。`introspection_result.mfa_verified` が
+  偽のとき 403 + `MFA_REQUIRED`。適用対象は将来（高額 transfer 等）に拡張可能。
+
+### 認証ポリシー早見表
+
+| 種別 | ローカル JWT 検証 | Introspection | MFA |
+|---|---|---|---|
+| 参照系（`GET /users/:id`, `/users/:id/transactions`, `GET /artifacts/:id`） | 必須 | なし | なし |
+| リソース作成（`POST /users`, `POST /artifacts`） | 必須 | なし | なし |
+| 金銭移動（`POST /ledger/mint`, `POST /ledger/transfer`） | 必須 | 必須 | `MfaRequired` include 箇所のみ |
 
 ## 技術スタック
 
@@ -184,11 +202,21 @@ bin/rails server
 
 ### 環境変数
 
-| 変数名 | 説明 | Docker時のデフォルト |
+| 変数名 | 用途 | Docker 時のデフォルト / 例 |
 |---|---|---|
 | `DB_HOST` | PostgreSQL ホスト | `db`（コンテナ名） |
 | `DB_USERNAME` | PostgreSQL ユーザー名 | `fuju_bank_backend` |
 | `DB_PASSWORD` | PostgreSQL パスワード | `password` |
+| `AUTHCORE_JWT_PUBLIC_KEY` | AuthCore が発行する JWT の検証用公開鍵（PEM 文字列）。改行は `\n` エスケープで投入 | （secret 経由で注入） |
+| `AUTHCORE_EXPECTED_ISSUER` | 許容する JWT の `iss` クレーム | `authcore` |
+| `AUTHCORE_EXPECTED_AUDIENCE` | 許容する JWT の `aud` クレーム | `authcore` |
+| `AUTHCORE_BASE_URL` | AuthCore のベース URL（introspection の呼び先） | `https://auth.fuju.example` |
+| `AUTHCORE_CLIENT_ID` | introspection 呼び出し時の Basic 認証 client_id | （AuthCore から受領） |
+| `AUTHCORE_CLIENT_SECRET` | introspection 呼び出し時の Basic 認証 client_secret | （AuthCore から受領、secret 経由で注入） |
+
+> `AUTHCORE_JWT_PUBLIC_KEY` / `AUTHCORE_CLIENT_SECRET` は機密情報。Docker / Kamal では
+> secret 経由で注入し、`.env` にコミットしないこと。テスト環境では `spec/rails_helper.rb` が
+> `TestKeypair.public_key_pem` と固定値を自動注入するため、開発者側での設定は不要。
 
 ## 開発コマンド（Makefile）
 
