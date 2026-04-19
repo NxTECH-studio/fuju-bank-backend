@@ -45,4 +45,15 @@ RSpec.describe "MfaRequired concern", type: :request do
       expect(response.parsed_body.dig("error", "code")).to eq("MFA_REQUIRED")
     end
   end
+
+  context "introspection inactive のとき MFA より先に TOKEN_INACTIVE が勝つ" do
+    before { stub_inactive_introspection }
+
+    it "401 + TOKEN_INACTIVE を返す（MFA_REQUIRED にならない）" do
+      get("/testing_mfa/show", headers: auth_headers(sub: sub))
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.parsed_body.dig("error", "code")).to eq("TOKEN_INACTIVE")
+    end
+  end
 end

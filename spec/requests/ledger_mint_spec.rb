@@ -180,6 +180,20 @@ RSpec.describe "Ledger Mint", type: :request do
         expect(response).to have_http_status(:unauthorized)
         expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")
       end
+
+      it "無効 JWT では introspection が呼ばれずに 401 UNAUTHENTICATED を返す", :skip_default_auth do
+        stub = stub_active_introspection
+
+        post(
+          "/ledger/mint",
+          params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } },
+          headers: headers.merge("Authorization" => "Bearer invalid-token"),
+        )
+
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")
+        expect(stub).not_to have_been_requested
+      end
     end
   end
 end
