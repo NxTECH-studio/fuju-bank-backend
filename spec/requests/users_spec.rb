@@ -2,9 +2,11 @@ require "rails_helper"
 
 RSpec.describe "Users", type: :request do
   describe "POST /users" do
+    let!(:external_user_id) { "01HZZZZZZZZZZZZZZZZZZZZZZZ" }
+
     context "正常系" do
       it "User と Account を 1 件ずつ作成し 201 を返す" do
-        expect { post("/users", params: { user: { name: "Alice" } }) }
+        expect { post("/users", params: { user: { external_user_id: external_user_id, name: "Alice" } }) }
           .to change { User.count }.by(1)
           .and change { Account.count }.by(1)
 
@@ -21,7 +23,7 @@ RSpec.describe "Users", type: :request do
       end
 
       it "作成された Account は kind=user / balance_fuju=0 で初期化される" do
-        post("/users", params: { user: { name: "Alice" } })
+        post("/users", params: { user: { external_user_id: external_user_id, name: "Alice" } })
 
         account = User.last.account
         expect(account.kind).to eq("user")
@@ -29,16 +31,42 @@ RSpec.describe "Users", type: :request do
       end
 
       it "public_key を指定した場合もレスポンスに反映される" do
-        post("/users", params: { user: { name: "Bob", public_key: "pk_abc" } })
+        post("/users", params: { user: { external_user_id: external_user_id, name: "Bob", public_key: "pk_abc" } })
 
         expect(response).to have_http_status(:created)
         expect(response.parsed_body).to include("name" => "Bob", "public_key" => "pk_abc")
       end
+
+      it "name を省略した場合も 201 を返す（lazy プロビジョニング想定）" do
+        expect { post("/users", params: { user: { external_user_id: external_user_id } }) }
+          .to change { User.count }.by(1)
+
+        expect(response).to have_http_status(:created)
+        expect(response.parsed_body).to include("name" => nil)
+      end
     end
 
     context "異常系" do
-      it "name が空のとき 422 VALIDATION_FAILED を返す" do
-        expect { post("/users", params: { user: { name: "" } }) }
+      it "external_user_id が不正な形式のとき 422 VALIDATION_FAILED を返す" do
+        expect { post("/users", params: { user: { external_user_id: "not-a-ulid", name: "Alice" } }) }
+          .not_to(change { User.count })
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      it "external_user_id が欠落しているとき 422 VALIDATION_FAILED を返す" do
+        expect { post("/users", params: { user: { name: "Alice" } }) }
+          .not_to(change { User.count })
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      it "external_user_id が重複しているとき 422 VALIDATION_FAILED を返す" do
+        create(:user, external_user_id: external_user_id)
+
+        expect { post("/users", params: { user: { external_user_id: external_user_id, name: "Bob" } }) }
           .not_to(change { User.count })
 
         expect(response).to have_http_status(:unprocessable_entity)
@@ -81,6 +109,19 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:not_found)
         expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
+      end
+    end
+
+    context "認証ポリシー" do
+      let!(:user) { create(:user) }
+
+      it "参照系では AuthCore introspection が呼ばれない" do
+        stub = stub_active_introspection
+
+        get("/users/#{user.id}")
+
+        expect(response).to have_http_status(:ok)
+        expect(stub).not_to have_been_requested
       end
     end
   end

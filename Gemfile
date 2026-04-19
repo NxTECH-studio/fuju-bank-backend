@@ -38,6 +38,9 @@ gem "image_processing", "~> 1.2"
 # Schema management (used instead of Rails migrations) [https://github.com/ridgepole/ridgepole]
 gem "ridgepole"
 
+# JWT decode/verify (AuthCore access token verification)
+gem "jwt"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[mri windows], require: "debug/prelude"
@@ -63,4 +66,5 @@ group :development, :test do
   gem "rspec-rails"
   gem "simplecov", require: false
   gem "test-prof"
+  gem "webmock"
 end
