@@ -1,7 +1,6 @@
 # User はふじゅ〜の受け取り手を表す。
 # 作成時に対応する Account(kind: "user") を 1 件生成する。
 class User < ApplicationRecord
-  # AuthCore の sub (ULID / Crockford Base32, 26 文字)
   ULID_REGEX = /\A[0-9A-HJKMNP-TV-Z]{26}\z/
 
   has_one :account, dependent: :restrict_with_exception
