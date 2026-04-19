@@ -4,16 +4,17 @@
 module Authcore
   module_function
 
+  # 最初の参照時にのみ PEM をパースして保持する。リクエスト毎に OpenSSL::PKey::RSA.new を
+  # 再実行すると RSA 鍵パースで数 ms のオーバーヘッドが乗るため。
   def jwt_public_key
-    pem = ENV.fetch("AUTHCORE_JWT_PUBLIC_KEY")
-    OpenSSL::PKey::RSA.new(pem)
+    @jwt_public_key ||= OpenSSL::PKey::RSA.new(ENV.fetch("AUTHCORE_JWT_PUBLIC_KEY"))
   end
 
   def expected_audience
-    ENV.fetch("AUTHCORE_EXPECTED_AUDIENCE", "authcore")
+    @expected_audience ||= ENV.fetch("AUTHCORE_EXPECTED_AUDIENCE", "authcore")
   end
 
   def expected_issuer
-    ENV.fetch("AUTHCORE_EXPECTED_ISSUER", "authcore")
+    @expected_issuer ||= ENV.fetch("AUTHCORE_EXPECTED_ISSUER", "authcore")
   end
 end
