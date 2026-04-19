@@ -19,14 +19,14 @@ module Authcore
   end
 
   def base_url
-    ENV.fetch("AUTHCORE_BASE_URL")
+    @base_url ||= ENV.fetch("AUTHCORE_BASE_URL")
   end
 
   def client_id
-    ENV.fetch("AUTHCORE_CLIENT_ID")
+    @client_id ||= ENV.fetch("AUTHCORE_CLIENT_ID")
   end
 
   def client_secret
-    ENV.fetch("AUTHCORE_CLIENT_SECRET")
+    @client_secret ||= ENV.fetch("AUTHCORE_CLIENT_SECRET")
   end
 end
