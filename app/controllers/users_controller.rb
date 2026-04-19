@@ -11,6 +11,9 @@ class UsersController < ApplicationController
 
   private
 
+  # NOTE: external_user_id をクライアントから直接受け取っているが、
+  # これは #22 (JWT 検証 concern) / #23 (lazy プロビジョニング) までの暫定。
+  # 本番では AuthCore の JWT から取り出した sub を注入する形に置き換える。
   def user_params
     params.expect(user: %i[external_user_id name public_key])
   end

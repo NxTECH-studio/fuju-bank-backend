@@ -36,11 +36,37 @@ RSpec.describe "Users", type: :request do
         expect(response).to have_http_status(:created)
         expect(response.parsed_body).to include("name" => "Bob", "public_key" => "pk_abc")
       end
+
+      it "name を省略した場合も 201 を返す（lazy プロビジョニング想定）" do
+        expect { post("/users", params: { user: { external_user_id: external_user_id } }) }
+          .to change { User.count }.by(1)
+
+        expect(response).to have_http_status(:created)
+        expect(response.parsed_body).to include("name" => nil)
+      end
     end
 
     context "異常系" do
       it "external_user_id が不正な形式のとき 422 VALIDATION_FAILED を返す" do
         expect { post("/users", params: { user: { external_user_id: "not-a-ulid", name: "Alice" } }) }
+          .not_to(change { User.count })
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      it "external_user_id が欠落しているとき 422 VALIDATION_FAILED を返す" do
+        expect { post("/users", params: { user: { name: "Alice" } }) }
+          .not_to(change { User.count })
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      it "external_user_id が重複しているとき 422 VALIDATION_FAILED を返す" do
+        create(:user, external_user_id: external_user_id)
+
+        expect { post("/users", params: { user: { external_user_id: external_user_id, name: "Bob" } }) }
           .not_to(change { User.count })
 
         expect(response).to have_http_status(:unprocessable_entity)

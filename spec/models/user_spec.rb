@@ -15,10 +15,30 @@ RSpec.describe User, type: :model do
         expect(user.errors[:external_user_id]).to be_present
       end
 
-      it "I/L/O/U を含む 26 文字は Crockford Base32 違反で invalid" do
-        user = build(:user, external_user_id: "I" * 26)
+      it "25 文字だと invalid" do
+        user = build(:user, external_user_id: "0" * 25)
         expect(user).not_to be_valid
         expect(user.errors[:external_user_id]).to be_present
+      end
+
+      it "27 文字だと invalid" do
+        user = build(:user, external_user_id: "0" * 27)
+        expect(user).not_to be_valid
+        expect(user.errors[:external_user_id]).to be_present
+      end
+
+      it "小文字を含むと invalid（大文字のみ許容）" do
+        user = build(:user, external_user_id: "01hzzzzzzzzzzzzzzzzzzzzzzz")
+        expect(user).not_to be_valid
+        expect(user.errors[:external_user_id]).to be_present
+      end
+
+      %w[I L O U].each do |forbidden|
+        it "Crockford Base32 禁止文字 #{forbidden} を含むと invalid" do
+          user = build(:user, external_user_id: forbidden * 26)
+          expect(user).not_to be_valid
+          expect(user.errors[:external_user_id]).to be_present
+        end
       end
 
       it "26 文字の Crockford Base32 文字列は valid" do
