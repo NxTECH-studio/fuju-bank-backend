@@ -4,6 +4,7 @@ RSpec.describe "Authentication", :skip_default_auth, type: :request do
   before do
     Rails.application.routes.draw do
       get "/testing_authentication/whoami" => "testing_authentication#whoami"
+      get "/testing_authentication/me" => "testing_authentication#me"
     end
   end
 
@@ -19,6 +20,27 @@ RSpec.describe "Authentication", :skip_default_auth, type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body).to eq("external_user_id" => sub)
+    end
+  end
+
+  describe "lazy user プロビジョニング" do
+    it "新規 sub の JWT で /me を叩くと User が 1 件生えて 200 を返す" do
+      expect do
+        get("/testing_authentication/me", headers: auth_headers(sub: sub))
+      end.to change { User.count }.by(1)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["external_user_id"]).to eq(sub)
+    end
+
+    it "同じ sub で 2 回目のリクエストは User は増えない" do
+      get("/testing_authentication/me", headers: auth_headers(sub: sub))
+
+      expect do
+        get("/testing_authentication/me", headers: auth_headers(sub: sub))
+      end.not_to(change { User.count })
+
+      expect(response).to have_http_status(:ok)
     end
   end
 
