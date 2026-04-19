@@ -67,13 +67,21 @@ RSpec.describe UserProvisioner do
 
     context "並行作成" do
       it "RecordNotUnique を rescue して再 find し、既存 User を返す" do
-        concurrent_user = create(:user, external_user_id: external_user_id)
+        existing_other_tx_user = create(:user, external_user_id: external_user_id)
 
-        # 1 回目の find_by は nil（create! 経路へ）、2 回目（rescue 後の find_by! 経由）は既存を返す
-        allow(User).to receive(:find_by).and_return(nil, concurrent_user)
+        # 1 回目の find_by は nil（create! 経路へ）、2 回目（rescue 後）は既存を返す
+        allow(User).to receive(:find_by).and_return(nil, existing_other_tx_user)
         allow(User).to receive(:create!).and_raise(ActiveRecord::RecordNotUnique.new("dup"))
 
-        expect(described_class.call(external_user_id: external_user_id)).to eq(concurrent_user)
+        expect(described_class.call(external_user_id: external_user_id)).to eq(existing_other_tx_user)
+      end
+
+      it "external_user_id 以外の unique 制約違反は再 raise する" do
+        allow(User).to receive(:find_by).and_return(nil)
+        allow(User).to receive(:create!).and_raise(ActiveRecord::RecordNotUnique.new("other unique"))
+
+        expect { described_class.call(external_user_id: external_user_id) }
+          .to raise_error(ActiveRecord::RecordNotUnique)
       end
     end
   end

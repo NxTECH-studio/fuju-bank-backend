@@ -20,7 +20,8 @@ class UserProvisioner
       User.create!(external_user_id: @external_user_id, name: nil)
     end
   rescue ActiveRecord::RecordNotUnique
-    # 並行リクエストで同一 sub の User が別トランザクションで先に作られたケース
-    User.find_by!(external_user_id: @external_user_id)
+    # 並行リクエストで同一 sub の User が別トランザクションで先に作られたケース。
+    # external_user_id 以外の unique 制約違反まで吸収しないよう、既存が見つからなければ再 raise する。
+    User.find_by(external_user_id: @external_user_id) || raise
   end
 end
