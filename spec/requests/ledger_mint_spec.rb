@@ -7,6 +7,8 @@ RSpec.describe "Ledger Mint", type: :request do
   let!(:idempotency_key) { "mint-key-12345" }
   let!(:headers) { { "Idempotency-Key" => idempotency_key } }
 
+  before { stub_active_introspection }
+
   def post_mint(params:, headers: self.headers)
     post("/ledger/mint", params: { ledger: params }, headers: headers)
   end
@@ -142,6 +144,41 @@ RSpec.describe "Ledger Mint", type: :request do
 
         expect(response).to have_http_status(:not_found)
         expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
+      end
+    end
+
+    context "認証ポリシー" do
+      it "introspection active=false で 401 TOKEN_INACTIVE（記帳されない）" do
+        stub_inactive_introspection
+
+        expect do
+          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+        end.not_to(change { LedgerTransaction.count })
+
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body.dig("error", "code")).to eq("TOKEN_INACTIVE")
+      end
+
+      it "introspection が 5xx で 503 AUTHCORE_UNAVAILABLE（記帳されない）" do
+        stub_introspection_server_error
+
+        expect do
+          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+        end.not_to(change { LedgerTransaction.count })
+
+        expect(response).to have_http_status(:service_unavailable)
+        expect(response.parsed_body.dig("error", "code")).to eq("AUTHCORE_UNAVAILABLE")
+      end
+
+      it "introspection の sub がローカル JWT の sub と食い違うと 401 UNAUTHENTICATED" do
+        stub_active_introspection(sub: "01HYZ9999999999999999999ZZ")
+
+        expect do
+          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+        end.not_to(change { LedgerTransaction.count })
+
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")
       end
     end
   end

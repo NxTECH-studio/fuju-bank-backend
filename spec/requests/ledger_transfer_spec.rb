@@ -9,6 +9,7 @@ RSpec.describe "Ledger Transfer", type: :request do
 
   before do
     from_user.account.update!(balance_fuju: 500)
+    stub_active_introspection
   end
 
   def post_transfer(params:, headers: self.headers)
@@ -143,6 +144,42 @@ RSpec.describe "Ledger Transfer", type: :request do
 
         expect(response).to have_http_status(:not_found)
         expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
+      end
+    end
+
+    context "認証ポリシー" do
+      it "introspection active=false で 401 TOKEN_INACTIVE（記帳されない）" do
+        stub_inactive_introspection
+
+        expect do
+          post_transfer(params: { from_user_id: from_user.id, to_user_id: to_user.id, amount: 100 })
+        end.not_to(change { LedgerTransaction.count })
+
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body.dig("error", "code")).to eq("TOKEN_INACTIVE")
+        expect(from_user.account.reload.balance_fuju).to eq(500)
+      end
+
+      it "introspection が 5xx で 503 AUTHCORE_UNAVAILABLE（記帳されない）" do
+        stub_introspection_server_error
+
+        expect do
+          post_transfer(params: { from_user_id: from_user.id, to_user_id: to_user.id, amount: 100 })
+        end.not_to(change { LedgerTransaction.count })
+
+        expect(response).to have_http_status(:service_unavailable)
+        expect(response.parsed_body.dig("error", "code")).to eq("AUTHCORE_UNAVAILABLE")
+      end
+
+      it "introspection の sub がローカル JWT の sub と食い違うと 401 UNAUTHENTICATED" do
+        stub_active_introspection(sub: "01HYZ9999999999999999999ZZ")
+
+        expect do
+          post_transfer(params: { from_user_id: from_user.id, to_user_id: to_user.id, amount: 100 })
+        end.not_to(change { LedgerTransaction.count })
+
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")
       end
     end
   end

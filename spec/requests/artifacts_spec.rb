@@ -97,5 +97,19 @@ RSpec.describe "Artifacts", type: :request do
         expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
       end
     end
+
+    context "認証ポリシー" do
+      let!(:user) { create(:user) }
+      let!(:artifact) { create(:artifact, user: user) }
+
+      it "参照系では AuthCore introspection が呼ばれない" do
+        stub = stub_active_introspection
+
+        get("/artifacts/#{artifact.id}")
+
+        expect(response).to have_http_status(:ok)
+        expect(stub).not_to have_been_requested
+      end
+    end
   end
 end
