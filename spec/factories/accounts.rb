@@ -8,5 +8,11 @@ FactoryBot.define do
       kind { "system_issuance" }
       user { nil }
     end
+
+    trait :store do
+      kind { "store" }
+      user { nil }
+      association :store, strategy: :create
+    end
   end
 end
