@@ -15,12 +15,23 @@ jobs:
           tags: tag:ci
 
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
+          FUJU_BANK_BACKEND_DATABASE_PASSWORD: ${{ secrets.FUJU_BANK_BACKEND_DATABASE_PASSWORD }}
+          ALLOWED_HOSTS: ${{ vars.ALLOWED_HOSTS }}
         with:
           host: ${{ vars.TS_CLIENT_IP }}
           username: ${{ vars.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: RAILS_MASTER_KEY,FUJU_BANK_BACKEND_DATABASE_PASSWORD,ALLOWED_HOSTS
           script: |
+            set -e
             cd /home/fuju/bank
             git pull origin main
-            docker compose up -d --build
+            export RAILS_MASTER_KEY FUJU_BANK_BACKEND_DATABASE_PASSWORD ALLOWED_HOSTS
+            # One-time cleanup of legacy dev-mode containers from the previous CD scheme.
+            # No-op after the first successful switchover (default project has no containers).
+            docker compose down || true
+            docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build
+            docker compose -p fuju-bank-prod -f compose.prod.yml exec -T web bundle exec ridgepole -c config/database.yml -E production --apply -f db/Schemafile

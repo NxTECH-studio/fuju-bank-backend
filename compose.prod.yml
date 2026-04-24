@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: fuju_bank_backend
+      POSTGRES_PASSWORD: ${FUJU_BANK_BACKEND_DATABASE_PASSWORD}
+      POSTGRES_DB: fuju_bank_backend_production
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fuju_bank_backend"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      RAILS_ENV: production
+      RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
+      DB_HOST: db
+      DB_USERNAME: fuju_bank_backend
+      FUJU_BANK_BACKEND_DATABASE_PASSWORD: ${FUJU_BANK_BACKEND_DATABASE_PASSWORD}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_prod_data:
