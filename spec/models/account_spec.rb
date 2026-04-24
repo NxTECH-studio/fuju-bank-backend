@@ -81,6 +81,13 @@ RSpec.describe Account, type: :model do
       expect(account).to be_valid
     end
 
+    it "kind=user で balance_fuju<0 を DB に保存しようとすると CHECK 制約で弾かれる" do
+      account = create(:user).account
+      expect do
+        account.update_columns(balance_fuju: -1) # rubocop:disable Rails/SkipsModelValidations
+      end.to raise_error(ActiveRecord::StatementInvalid)
+    end
+
     it "kind=store で balance_fuju<0 を DB に保存しようとすると CHECK 制約で弾かれる" do
       account = create(:account, :store)
       expect do

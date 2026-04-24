@@ -14,7 +14,7 @@ class Account < ApplicationRecord
   validates :user_id, absence: true, unless: :user_kind?
   validates :store_id, presence: true, if: :store_kind?
   validates :store_id, absence: true, unless: :store_kind?
-  validates :balance_fuju, numericality: { greater_than_or_equal_to: 0 }, if: -> (a) { a.user_kind? || a.store_kind? }
+  validates :balance_fuju, numericality: { greater_than_or_equal_to: 0 }, if: -> (account) { account.user_kind? || account.store_kind? }
 
   scope :system_issuance, -> { where(kind: "system_issuance") }
 
