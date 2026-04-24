@@ -29,18 +29,31 @@ create_table "artifacts", force: :cascade do |t|
   t.index %w[user_id created_at]
 end
 
+create_table "stores", force: :cascade do |t|
+  t.string "code", null: false, comment: "QR に埋め込む店舗識別子"
+  t.string "name", null: false, comment: "店舗表示名"
+  t.string "signing_secret", null: false, comment: "店舗個別の HMAC 秘密鍵。将来 Rails credentials 管理に移行予定"
+  t.boolean "active", null: false, default: true, comment: "無効化フラグ"
+  t.timestamps
+
+  t.index ["code"], unique: true
+end
+
 create_table "accounts", force: :cascade do |t|
   t.references "user", foreign_key: true, index: false, comment: "kind = 'user' のときに必須（部分ユニークインデックスで担保）"
-  t.string "kind", null: false, comment: "system_issuance / user"
+  t.references "store", foreign_key: true, index: false, comment: "kind = 'store' のときに必須（部分ユニークインデックスで担保）"
+  t.string "kind", null: false, comment: "system_issuance / user / store"
   t.bigint "balance_fuju", null: false, default: 0, comment: "残高キャッシュ（entries SUM と一致させる）"
   t.timestamps
 
   t.index %w[kind]
   t.index %w[user_id], unique: true, where: "user_id IS NOT NULL",
                        name: "index_accounts_on_user_id_unique_when_present"
+  t.index %w[store_id], unique: true, where: "store_id IS NOT NULL",
+                        name: "index_accounts_on_store_id_unique_when_present"
 end
 
-# CHECK 制約: User 口座は残高が負になってはいけない（system_issuance は発行原資なので負値 OK）
+# CHECK 制約: User / Store 口座は残高が負になってはいけない（system_issuance は発行原資なので負値 OK）
 execute <<~SQL.squish
   ALTER TABLE accounts
     DROP CONSTRAINT IF EXISTS balance_non_negative_for_user
@@ -48,7 +61,7 @@ SQL
 execute <<~SQL.squish
   ALTER TABLE accounts
     ADD CONSTRAINT balance_non_negative_for_user
-    CHECK (kind <> 'user' OR balance_fuju >= 0)
+    CHECK (kind = 'system_issuance' OR balance_fuju >= 0)
 SQL
 
 create_table "ledger_transactions", force: :cascade do |t|
