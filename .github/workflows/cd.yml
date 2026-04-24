@@ -34,4 +34,4 @@ jobs:
             # No-op after the first successful switchover (default project has no containers).
             docker compose down || true
             docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build
-            docker compose -p fuju-bank-prod -f compose.prod.yml exec -T web bundle exec ridgepole -c config/database.yml -E production --apply -f db/Schemafile
+            docker compose -p fuju-bank-prod -f compose.prod.yml exec -T web bundle exec ridgepole -c config/database.yml -E production -s primary --apply -f db/Schemafile
