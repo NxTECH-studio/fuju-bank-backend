@@ -45,6 +45,13 @@ RSpec.describe Store, type: :model do
     end
   end
 
+  describe "#inspect" do
+    it "signing_secret が平文で露出しない" do
+      store = create(:store, signing_secret: "super-secret-value")
+      expect(store.inspect).not_to include("super-secret-value")
+    end
+  end
+
   describe ".active" do
     let!(:active_store) { create(:store, active: true) }
     let!(:inactive_store) { create(:store, active: false) }
