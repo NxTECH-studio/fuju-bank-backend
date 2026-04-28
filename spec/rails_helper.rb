@@ -23,6 +23,7 @@ RSpec.configure do |config|
   config.include FactoryBot::Syntax::Methods
   config.include ActiveSupport::Testing::TimeHelpers
   config.include AuthHelpers, type: :request
+  config.include AuthHelpers, type: :channel
   config.include AuthenticatedRequest, type: :request
   config.include IntrospectionStubs, type: :request
 end

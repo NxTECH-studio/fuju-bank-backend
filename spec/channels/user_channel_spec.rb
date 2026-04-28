@@ -2,15 +2,22 @@ require "rails_helper"
 
 RSpec.describe UserChannel, type: :channel do
   let!(:user) { create(:user) }
+  let!(:other_user) { create(:user) }
 
-  it "subscribes with valid user_id" do
-    subscribe(user_id: user.id)
+  before do
+    stub_connection(current_user: user)
+  end
+
+  it "current_user の broadcast を stream する" do
+    subscribe
+
     expect(subscription).to be_confirmed
     expect(subscription).to have_stream_for(user)
   end
 
-  it "rejects subscription with unknown user_id" do
-    subscribe(user_id: user.id + 1)
-    expect(subscription).to be_rejected
+  it "他人の broadcast を stream しない" do
+    subscribe
+
+    expect(subscription).not_to have_stream_for(other_user)
   end
 end
