@@ -23,11 +23,6 @@ module JwtAuthenticatable
     @current_external_user_id
   end
 
-  # 呼ばれないコントローラでは DB ヒットしないよう lazy 評価する。
-  def current_user
-    @current_user ||= UserProvisioner.call(external_user_id: current_external_user_id)
-  end
-
   def extract_bearer_token
     header = request.headers["Authorization"]
     return nil if header.blank?
