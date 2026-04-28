@@ -17,8 +17,8 @@ class ApplicationCable::Connection < ActionCable::Connection::Base
   def find_verified_user
     token = extract_jwt
     claims = Authcore::JwtVerifier.call(token: token)
-    UserProvisioner.call(external_user_id: claims.fetch("sub"))
-  rescue AuthenticationError, KeyError
+    UserProvisioner.call(external_user_id: claims["sub"])
+  rescue AuthenticationError
     reject_unauthorized_connection
   end
 
@@ -29,7 +29,7 @@ class ApplicationCable::Connection < ActionCable::Connection::Base
   # `Sec-WebSocket-Protocol: actioncable-v1-json, bearer, <jwt>` から JWT を抽出する。
   # `bearer` トークンの直後の要素を JWT として扱う。
   def extract_from_subprotocol
-    raw = request.headers["HTTP_SEC_WEBSOCKET_PROTOCOL"] || request.headers["Sec-WebSocket-Protocol"]
+    raw = request.headers["Sec-WebSocket-Protocol"]
     return nil if raw.blank?
 
     parts = raw.split(",").map(&:strip)
