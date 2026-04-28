@@ -17,7 +17,7 @@ RSpec.describe "Ledger Mint", type: :request do
     context "正常系" do
       it "200 で記帳され、user 残高 +N / system_issuance 残高 -N" do
         expect do
-          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 })
         end.to change { LedgerTransaction.count }.by(1)
 
         expect(response).to have_http_status(:ok)
@@ -26,7 +26,7 @@ RSpec.describe "Ledger Mint", type: :request do
       end
 
       it "レスポンスボディに tx の主要フィールドが含まれる" do
-        post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 50 })
+        post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 50 })
 
         parsed = response.parsed_body
         expect(parsed.keys).to match_array(%w[id kind artifact_id idempotency_key memo metadata occurred_at created_at])
@@ -42,7 +42,7 @@ RSpec.describe "Ledger Mint", type: :request do
         metadata = { "dwell_seconds" => 42, "gaze" => { "intensity" => 0.9 } }
         post(
           "/ledger/mint",
-          params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 10, metadata: metadata } }.to_json,
+          params: { ledger: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 10, metadata: metadata } }.to_json,
           headers: headers.merge("Content-Type" => "application/json"),
         )
 
@@ -54,7 +54,7 @@ RSpec.describe "Ledger Mint", type: :request do
 
       it "occurred_at を渡さない場合 Time.current が保存される" do
         travel_to Time.zone.local(2026, 4, 18, 10, 0, 0) do
-          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 10 })
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 10 })
 
           expect(response).to have_http_status(:ok)
           expect(LedgerTransaction.last.occurred_at).to eq(Time.current)
@@ -63,7 +63,7 @@ RSpec.describe "Ledger Mint", type: :request do
 
       it "occurred_at に ISO8601 を渡すとその時刻で保存される" do
         iso = "2026-04-17T12:34:56+09:00"
-        post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 10, occurred_at: iso })
+        post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 10, occurred_at: iso })
 
         expect(response).to have_http_status(:ok)
         expect(LedgerTransaction.last.occurred_at).to eq(Time.zone.parse(iso))
@@ -71,7 +71,7 @@ RSpec.describe "Ledger Mint", type: :request do
 
       it "occurred_at が空文字列の場合は Time.current にフォールバックする" do
         travel_to Time.zone.local(2026, 4, 18, 9, 0, 0) do
-          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 10, occurred_at: "" })
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 10, occurred_at: "" })
 
           expect(response).to have_http_status(:ok)
           expect(LedgerTransaction.last.occurred_at).to eq(Time.current)
@@ -79,14 +79,14 @@ RSpec.describe "Ledger Mint", type: :request do
       end
 
       it "metadata 未指定の場合は空 Hash が保存される" do
-        post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 10 })
+        post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 10 })
 
         expect(response).to have_http_status(:ok)
         expect(LedgerTransaction.last.metadata).to eq({})
       end
 
       it "amount が文字列 '100' として渡されても 100 ふじゅ〜として記帳される" do
-        post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: "100" })
+        post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: "100" })
 
         expect(response).to have_http_status(:ok)
         expect(user.account.reload.balance_fuju).to eq(100)
@@ -95,11 +95,11 @@ RSpec.describe "Ledger Mint", type: :request do
 
     context "冪等性" do
       it "同一 Idempotency-Key で 2 回 POST しても 1 件だけ作成され、2 回目も 200 で既存を返す" do
-        post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+        post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 })
         first_id = response.parsed_body["id"]
 
         expect do
-          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 })
         end.not_to(change { LedgerTransaction.count })
 
         expect(response).to have_http_status(:ok)
@@ -110,7 +110,7 @@ RSpec.describe "Ledger Mint", type: :request do
 
     context "異常系" do
       it "Idempotency-Key 未指定で 400 VALIDATION_FAILED" do
-        post("/ledger/mint", params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } })
+        post("/ledger/mint", params: { ledger: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 } })
 
         expect(response).to have_http_status(:bad_request)
         expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
@@ -118,7 +118,7 @@ RSpec.describe "Ledger Mint", type: :request do
 
       it "amount=0 で 400 VALIDATION_FAILED（記帳されない）" do
         expect do
-          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 0 })
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 0 })
         end.not_to(change { LedgerTransaction.count })
 
         expect(response).to have_http_status(:bad_request)
@@ -126,24 +126,70 @@ RSpec.describe "Ledger Mint", type: :request do
       end
 
       it "amount=-10 で 400 VALIDATION_FAILED" do
-        post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: -10 })
+        post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: -10 })
 
         expect(response).to have_http_status(:bad_request)
         expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
       end
 
       it "artifact_id が存在しないとき 404 NOT_FOUND" do
-        post_mint(params: { artifact_id: 999_999, user_id: user.id, amount: 100 })
+        post_mint(params: { artifact_id: 999_999, user_id: user.external_user_id, amount: 100 })
 
         expect(response).to have_http_status(:not_found)
         expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
       end
 
-      it "user_id が存在しないとき 404 NOT_FOUND" do
-        post_mint(params: { artifact_id: artifact.id, user_id: 999_999, amount: 100 })
+      it "user_id が ULID 形式でない場合 400 VALIDATION_FAILED" do
+        post_mint(params: { artifact_id: artifact.id, user_id: "not-a-ulid", amount: 100 })
 
-        expect(response).to have_http_status(:not_found)
-        expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
+        expect(response).to have_http_status(:bad_request)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      it "user_id が空のとき 400 VALIDATION_FAILED" do
+        post("/ledger/mint", params: { ledger: { artifact_id: artifact.id, amount: 100 } }, headers: headers)
+
+        expect(response).to have_http_status(:bad_request)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+    end
+
+    # ID 空間の cross-service 一致を検証する。fuju-emotion-model からの代理 mint で
+    # creator がまだ Bank HUD にログインしていないケース（= Bank に User row が
+    # ない）でも、external_user_id (= AuthCore sub) で lazy 作成される。
+    context "受取人 ID 解決（ULID + lazy provision）" do
+      let!(:fresh_external_id) { "01HZZ0000000000000000NEW01" }
+
+      it "Bank に User が無い ULID でも自動プロビジョンして mint 成功" do
+        expect(User.find_by(external_user_id: fresh_external_id)).to be_nil
+
+        expect do
+          post_mint(params: { artifact_id: artifact.id, user_id: fresh_external_id, amount: 50 })
+        end.to(change { User.count }.by(1).and(change { LedgerTransaction.count }.by(1)))
+
+        expect(response).to have_http_status(:ok)
+        new_user = User.find_by!(external_user_id: fresh_external_id)
+        expect(new_user.account.reload.balance_fuju).to eq(50)
+      end
+
+      it "既存 User は再利用されて新規行は作られない" do
+        expect do
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 30 })
+        end.to(change { LedgerTransaction.count }.by(1).and(not_change { User.count }))
+
+        expect(user.account.reload.balance_fuju).to eq(30)
+      end
+
+      it "artifact_id 未指定でも mint 可能（fuju 由来の代理 mint パス）" do
+        post("/ledger/mint",
+             params: { ledger: { user_id: user.external_user_id, amount: 70 } },
+             headers: headers,)
+
+        expect(response).to have_http_status(:ok)
+        tx = LedgerTransaction.last
+        expect(tx.kind).to eq("mint")
+        expect(tx.artifact_id).to be_nil
+        expect(user.account.reload.balance_fuju).to eq(70)
       end
     end
 
@@ -152,7 +198,7 @@ RSpec.describe "Ledger Mint", type: :request do
         stub_inactive_introspection
 
         expect do
-          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 })
         end.not_to(change { LedgerTransaction.count })
 
         expect(response).to have_http_status(:unauthorized)
@@ -163,7 +209,7 @@ RSpec.describe "Ledger Mint", type: :request do
         stub_introspection_server_error
 
         expect do
-          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 })
         end.not_to(change { LedgerTransaction.count })
 
         expect(response).to have_http_status(:service_unavailable)
@@ -174,7 +220,7 @@ RSpec.describe "Ledger Mint", type: :request do
         stub_active_introspection(sub: "01HYZ9999999999999999999ZZ")
 
         expect do
-          post_mint(params: { artifact_id: artifact.id, user_id: user.id, amount: 100 })
+          post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 })
         end.not_to(change { LedgerTransaction.count })
 
         expect(response).to have_http_status(:unauthorized)
@@ -186,7 +232,7 @@ RSpec.describe "Ledger Mint", type: :request do
 
         post(
           "/ledger/mint",
-          params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } },
+          params: { ledger: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 } },
           headers: headers.merge("Authorization" => "Bearer invalid-token"),
         )
 
@@ -206,7 +252,7 @@ RSpec.describe "Ledger Mint", type: :request do
 
         post(
           "/ledger/mint",
-          params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } },
+          params: { ledger: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 } },
           headers: headers.merge(service_auth_headers(client_id: service_client_id, scope: "mint:creator_payouts")),
         )
 
@@ -221,7 +267,7 @@ RSpec.describe "Ledger Mint", type: :request do
         expect do
           post(
             "/ledger/mint",
-            params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } },
+            params: { ledger: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 } },
             headers: headers.merge(service_auth_headers(client_id: service_client_id, scope: "read:contents")),
           )
         end.not_to(change { LedgerTransaction.count })
@@ -235,7 +281,7 @@ RSpec.describe "Ledger Mint", type: :request do
 
         post(
           "/ledger/mint",
-          params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } },
+          params: { ledger: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 } },
           headers: headers.merge(service_auth_headers(client_id: service_client_id, scope: "")),
         )
 
