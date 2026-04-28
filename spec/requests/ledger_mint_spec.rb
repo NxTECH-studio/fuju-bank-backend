@@ -195,5 +195,53 @@ RSpec.describe "Ledger Mint", type: :request do
         expect(stub).not_to have_been_requested
       end
     end
+
+    # fuju-emotion-model など service token 経由の代理 mint。caller の sub
+    # は client_id（ユーザー ID 空間外）で、recipient は mint_params[:user_id]。
+    context "service token 経由（代理 mint）" do
+      let!(:service_client_id) { "fuju-emotion-model" }
+
+      it "scope に mint:creator_payouts を含む service token なら 200 で記帳" do
+        stub_active_service_introspection(client_id: service_client_id, scope: "mint:creator_payouts")
+
+        post(
+          "/ledger/mint",
+          params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } },
+          headers: headers.merge(service_auth_headers(client_id: service_client_id, scope: "mint:creator_payouts")),
+        )
+
+        expect(response).to have_http_status(:ok)
+        expect(user.account.reload.balance_fuju).to eq(100)
+        expect(LedgerTransaction.last.kind).to eq("mint")
+      end
+
+      it "scope に mint:creator_payouts が無い service token は 403 FORBIDDEN" do
+        stub_active_service_introspection(client_id: service_client_id, scope: "read:contents")
+
+        expect do
+          post(
+            "/ledger/mint",
+            params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } },
+            headers: headers.merge(service_auth_headers(client_id: service_client_id, scope: "read:contents")),
+          )
+        end.not_to(change { LedgerTransaction.count })
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body.dig("error", "code")).to eq("FORBIDDEN")
+      end
+
+      it "scope を一切持たない service token も 403 FORBIDDEN" do
+        stub_active_service_introspection(client_id: service_client_id, scope: "")
+
+        post(
+          "/ledger/mint",
+          params: { ledger: { artifact_id: artifact.id, user_id: user.id, amount: 100 } },
+          headers: headers.merge(service_auth_headers(client_id: service_client_id, scope: "")),
+        )
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body.dig("error", "code")).to eq("FORBIDDEN")
+      end
+    end
   end
 end
