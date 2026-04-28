@@ -150,6 +150,14 @@ transfer (User → User):
   scope 不足は 403 `FORBIDDEN`。ユーザートークン経路（既存 MVP）には scope 検査は
   かかりません。fuju-emotion-model などの上位サービスは AuthCore の `clients.allowed_scope`
   に当該 scope を登録した上で `POST /oauth/token` から service token を取得して呼びます。
+- **mint 受取人 ID の cross-service 一致保証**: `POST /ledger/mint` の `user_id`
+  パラメータは **AuthCore の `sub`（= `users.external_user_id`、ULID 26 文字）** を
+  期待します。Bank 内部の autoincrement PK (`users.id`) は受け付けません。これにより
+  SNS の作者 ID（= AuthCore sub）と Bank の受取口座が cross-service で一意に対応
+  することが保証されます。Bank に該当 User が未登録なら `UserProvisioner` で
+  lazy 作成されるため、creator がまだ Bank HUD にログインしていなくても代理 mint
+  が成立します。`artifact_id` は任意で、未指定時は `ledger_transactions.artifact_id`
+  は NULL のまま記帳します（content_id 等の追跡情報は metadata JSONB に乗せる）。
 - **MFA ゲート**: `MfaRequired` concern を用意済み。`introspection_result.mfa_verified` が
   偽のとき 403 + `MFA_REQUIRED`。適用対象は将来（高額 transfer 等）に拡張可能。
 
