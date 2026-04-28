@@ -1,21 +1,36 @@
+# /users/me 系エンドポイントを提供する。
+# external_user_id は JWT の sub から取得し、クライアント params からは受け取らない。
 class UsersController < ApplicationController
+  before_action :require_current_user!, only: %i[show show_me]
+
   def show
-    user = User.includes(:account).find(params[:id])
-    render(json: serialize_user(user))
+    raise ForbiddenError.new(message: "他のユーザー情報は参照できません") if params[:id].to_s != current_user.id.to_s
+
+    render(json: serialize_user(current_user))
   end
 
-  def create
-    user = User.create!(user_params)
-    render(json: serialize_user(user), status: :created)
+  def show_me
+    render(json: serialize_user(current_user))
+  end
+
+  def upsert_me
+    user = UserProvisioner.call(
+      external_user_id: current_external_user_id,
+      name: upsert_params[:name],
+      public_key: upsert_params[:public_key],
+    )
+    status = user.previously_new_record? ? :created : :ok
+    render(json: serialize_user(user), status: status)
   end
 
   private
 
-  # NOTE: external_user_id をクライアントから直接受け取っているが、
-  # これは #22 (JWT 検証 concern) / #23 (lazy プロビジョニング) までの暫定。
-  # 本番では AuthCore の JWT から取り出した sub を注入する形に置き換える。
-  def user_params
-    params.expect(user: %i[external_user_id name public_key])
+  def require_current_user!
+    raise AuthenticationError unless current_user
+  end
+
+  def upsert_params
+    params.permit(:name, :public_key)
   end
 
   def serialize_user(user)
