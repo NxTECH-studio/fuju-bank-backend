@@ -1,16 +1,15 @@
 # /users/me 系エンドポイントを提供する。
 # external_user_id は JWT の sub から取得し、クライアント params からは受け取らない。
 class UsersController < ApplicationController
+  before_action :require_current_user!, only: %i[show show_me]
+
   def show
-    raise AuthenticationError unless current_user
-    raise BankError.new(code: "FORBIDDEN", message: "他のユーザー情報は参照できません", http_status: :forbidden) if params[:id].to_i != current_user.id
+    raise ForbiddenError.new(message: "他のユーザー情報は参照できません") if params[:id].to_i != current_user.id
 
     render(json: serialize_user(current_user))
   end
 
   def show_me
-    raise AuthenticationError unless current_user
-
     render(json: serialize_user(current_user))
   end
 
@@ -25,6 +24,10 @@ class UsersController < ApplicationController
   end
 
   private
+
+  def require_current_user!
+    raise AuthenticationError unless current_user
+  end
 
   def upsert_params
     params.permit(:name, :public_key)
