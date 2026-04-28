@@ -1,11 +1,23 @@
 # 金銭移動系エンドポイント（mint / transfer）。
 # ローカル JWT 検証に加えて AuthCore introspection を要求する。
 # MFA 要否は MVP 時点では未決定。必要になった時点で `include MfaRequired` を追加する。
+#
+# `mint` は service-to-service 経路（fuju-emotion-model から creator への
+# 代理 mint）も受け付ける。そのために `service_actor_allowed!` を宣言した
+# 上で、service token から呼ばれた場合に限り `mint:creator_payouts`
+# スコープを要求する。ユーザートークン経由（既存 MVP 経路）は scope 検査
+# をスキップする。
 class LedgerController < ApplicationController
   include IntrospectionRequired
   include Idempotent
 
+  service_actor_allowed!
+
+  MINT_SCOPE = "mint:creator_payouts".freeze
+
   def mint
+    enforce_mint_scope_for_service_actor!
+
     artifact = Artifact.find(mint_params[:artifact_id])
     user = User.find(mint_params[:user_id])
 
@@ -39,6 +51,15 @@ class LedgerController < ApplicationController
   end
 
   private
+
+  # service token から呼ばれた場合のみ `mint:creator_payouts` スコープを
+  # 要求する。ユーザートークン経由は MVP 互換のため scope 検査スキップ。
+  def enforce_mint_scope_for_service_actor!
+    return unless service_actor?
+    return if introspection_result.scope?(MINT_SCOPE)
+
+    raise AuthorizationError.new(message: "service token に scope=#{MINT_SCOPE} が必要です")
+  end
 
   def mint_params
     @mint_params ||= params.expect(
