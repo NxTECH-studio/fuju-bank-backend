@@ -9,7 +9,7 @@ RSpec.describe "config/cable.yml" do # rubocop:disable RSpec/DescribeClass
     end
 
     it "writes pubsub messages to the primary database (相乗り構成)" do
-      expect(production.dig(:connects_to, :database, :writing)).to eq("primary")
+      expect(production.dig(:connects_to, :database, :writing).to_s).to eq("primary")
     end
 
     it "passes a Solid Cable parseable polling_interval (e.g. '0.1.seconds')" do

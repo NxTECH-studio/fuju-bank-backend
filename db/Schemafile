@@ -99,13 +99,18 @@ execute <<~SQL.squish
 SQL
 
 # Solid Cable: ActionCable の pubsub をプライマリ DB 相乗りで保持するためのテーブル。
-# gem 付属マイグレーションは使わず、ridgepole 一元管理に揃える。
+# primary DB は ridgepole 一元管理の方針につき、gem 付属の cable_schema.rb は使わない。
+# （queue/cache は別 DB として database.yml で分離されており、それぞれ Rails 標準の schema dump で管理）
+# limit は MySQL 互換性および gem 公式テンプレ (lib/generators/solid_cable/install/templates/db/cable_schema.rb)
+# との整合のために明示。Postgres では bytea のため DDL 上は無視される。
 create_table "solid_cable_messages", force: :cascade do |t|
-  t.binary "channel", null: false
-  t.binary "payload", null: false
+  t.binary "channel", null: false, limit: 1024
+  t.binary "payload", null: false, limit: 536_870_912
   t.datetime "created_at", null: false
   t.bigint "channel_hash", null: false
 
+  # 索引は gem 公式テンプレと同一構成。channel_hash が hot read path（broadcastable scope）、
+  # created_at が trim path、channel は運用上の lookup 用途で gem 互換のため維持。
   t.index ["channel"]
   t.index ["channel_hash"]
   t.index ["created_at"]
