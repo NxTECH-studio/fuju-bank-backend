@@ -10,6 +10,6 @@ class ApplicationController < ActionController::API
   def current_user
     return @current_user if defined?(@current_user)
 
-    @current_user = User.find_by(external_user_id: current_external_user_id)
+    @current_user = User.includes(:account).find_by(external_user_id: current_external_user_id)
   end
 end

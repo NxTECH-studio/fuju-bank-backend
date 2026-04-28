@@ -52,6 +52,13 @@ RSpec.describe "Users", type: :request do
         expect(response).to have_http_status(:created)
         expect(response.parsed_body).to include("name" => nil)
       end
+
+      it "name に空文字を渡してもそのまま受け入れる（モデル側に長さ制約なし）" do
+        post("/users/me", params: { name: "" })
+
+        expect(response).to have_http_status(:created)
+        expect(response.parsed_body).to include("name" => "")
+      end
     end
 
     context "既存（idempotent）" do
@@ -171,6 +178,13 @@ RSpec.describe "Users", type: :request do
 
       it "他人扱いとして 403 FORBIDDEN を返す" do
         get("/users/999999")
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body.dig("error", "code")).to eq("FORBIDDEN")
+      end
+
+      it "非数値の id でも 403 FORBIDDEN を返す（to_i による偽陽性なし）" do
+        get("/users/abc")
 
         expect(response).to have_http_status(:forbidden)
         expect(response.parsed_body.dig("error", "code")).to eq("FORBIDDEN")

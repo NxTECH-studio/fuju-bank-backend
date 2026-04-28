@@ -4,7 +4,7 @@ class UsersController < ApplicationController
   before_action :require_current_user!, only: %i[show show_me]
 
   def show
-    raise ForbiddenError.new(message: "他のユーザー情報は参照できません") if params[:id].to_i != current_user.id
+    raise ForbiddenError.new(message: "他のユーザー情報は参照できません") if params[:id].to_s != current_user.id.to_s
 
     render(json: serialize_user(current_user))
   end

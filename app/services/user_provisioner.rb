@@ -13,14 +13,10 @@ class UserProvisioner
   end
 
   def call
-    existing = User.find_by(external_user_id: @external_user_id)
-    return existing if existing
+    existing_user = User.find_by(external_user_id: @external_user_id)
+    return existing_user if existing_user
 
     create_user!
-  rescue ActiveRecord::RecordNotUnique
-    # 並行リクエストで同一 sub の User が別トランザクションで先に作られたケース。
-    # external_user_id 以外の unique 制約違反まで吸収しないよう、既存が見つからなければ再 raise する。
-    User.find_by(external_user_id: @external_user_id) || raise
   end
 
   private
@@ -29,5 +25,9 @@ class UserProvisioner
     ApplicationRecord.transaction do
       User.create!(external_user_id: @external_user_id, name: @name, public_key: @public_key)
     end
+  rescue ActiveRecord::RecordNotUnique
+    # 並行リクエストで同一 sub の User が別トランザクションで先に作られたケース。
+    # external_user_id 以外の unique 制約違反まで吸収しないよう、既存が見つからなければ再 raise する。
+    User.find_by(external_user_id: @external_user_id) || raise
   end
 end
