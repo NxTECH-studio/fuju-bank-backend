@@ -97,3 +97,16 @@ execute <<~SQL.squish
     ADD CONSTRAINT amount_non_zero
     CHECK (amount <> 0)
 SQL
+
+# Solid Cable: ActionCable の pubsub をプライマリ DB 相乗りで保持するためのテーブル。
+# gem 付属マイグレーションは使わず、ridgepole 一元管理に揃える。
+create_table "solid_cable_messages", force: :cascade do |t|
+  t.binary "channel", null: false
+  t.binary "payload", null: false
+  t.datetime "created_at", null: false
+  t.bigint "channel_hash", null: false
+
+  t.index ["channel"]
+  t.index ["channel_hash"]
+  t.index ["created_at"]
+end
