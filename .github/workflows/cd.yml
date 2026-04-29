@@ -20,16 +20,17 @@ jobs:
           RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
           FUJU_BANK_BACKEND_DATABASE_PASSWORD: ${{ secrets.FUJU_BANK_BACKEND_DATABASE_PASSWORD }}
           ALLOWED_HOSTS: ${{ vars.ALLOWED_HOSTS }}
+          AUTHCORE_JWT_PUBLIC_KEY: ${{ secrets.AUTHCORE_JWT_PUBLIC_KEY }}
         with:
           host: ${{ vars.TS_CLIENT_IP }}
           username: ${{ vars.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: RAILS_MASTER_KEY,FUJU_BANK_BACKEND_DATABASE_PASSWORD,ALLOWED_HOSTS
+          envs: RAILS_MASTER_KEY,FUJU_BANK_BACKEND_DATABASE_PASSWORD,ALLOWED_HOSTS,AUTHCORE_JWT_PUBLIC_KEY
           script: |
             set -e
             cd /home/fuju/bank
             git pull origin main
-            export RAILS_MASTER_KEY FUJU_BANK_BACKEND_DATABASE_PASSWORD ALLOWED_HOSTS
+            export RAILS_MASTER_KEY FUJU_BANK_BACKEND_DATABASE_PASSWORD ALLOWED_HOSTS AUTHCORE_JWT_PUBLIC_KEY
             # One-time cleanup of legacy dev-mode containers from the previous CD scheme.
             # No-op after the first successful switchover (default project has no containers).
             docker compose down || true
