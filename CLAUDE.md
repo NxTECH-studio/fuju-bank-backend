@@ -76,8 +76,8 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 - **バックグラウンドジョブ**: Solid Queue（DBベースのActive Jobアダプタ）。
 - **キャッシュ**: Solid Cache（DBベースのRails.cacheアダプタ）。
 - **リアルタイム配信**: Solid Cable / ActionCable。`UserChannel` を通じてユーザー HUD へ ledger イベントを push。
-- **開発環境**: Docker Compose（`compose.yml` + `Dockerfile.dev`）。Makefile でコマンドをラップ。
-- **デプロイ**: Kamal（Dockerベース）。`config/deploy.yml` と `Dockerfile` を参照。
+- **開発環境**: Docker Compose（`compose.yml` + `Dockerfile`）。Makefile でコマンドをラップ。
+- **デプロイ**: Kamal（Dockerベース）。`config/deploy.yml` と `Dockerfile.prod`（本番イメージ用）を参照。
 - **DB接続**: 環境変数 `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` で設定。Docker環境では `compose.yml` で自動設定。
 - **CORS**: ネイティブクライアントのみ運用のため CORS 設定不要。`config/initializers/cors.rb` は無効化済みで、`rack-cors` Gem も導入していない。ブラウザクライアントから叩く要件が出た場合は許可オリジンを明示して `rack-cors` を再導入する（再導入時の方針は `docs/tasks/b3-cors-policy.md` の選択肢 (b) を参照）。
 
