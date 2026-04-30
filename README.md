@@ -293,7 +293,7 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 
 ## デプロイ
 
-- **Kamal**（Docker ベース）。設定は `config/deploy.yml` と `Dockerfile`。
+- **Kamal**（Docker ベース）。設定は `config/deploy.yml` と `Dockerfile.prod`（本番イメージ用）。
 - **ブランチ戦略**: `develop` をデフォルトブランチとし、`feat/xxx` を `develop` から切って PR。
   `develop → main` のリリース PR は GitHub Actions で自動生成・更新されます。
 - **本番ブランチ**: `main`（ブランチ保護あり、直接 push 禁止）。

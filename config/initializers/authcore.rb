@@ -6,8 +6,22 @@ module Authcore
 
   # 最初の参照時にのみ PEM をパースして保持する。リクエスト毎に OpenSSL::PKey::RSA.new を
   # 再実行すると RSA 鍵パースで数 ms のオーバーヘッドが乗るため。
+  #
+  # 鍵の入力方法は 2 系統:
+  # - `AUTHCORE_JWT_PUBLIC_KEY_FILE`: PEM ファイルへの絶対パス（dev で AuthCore リポジトリを
+  #   bind-mount して参照する想定。AuthCore で `gen-keys.sh` 再実行 → bank コンテナ再起動だけで追従）。
+  # - `AUTHCORE_JWT_PUBLIC_KEY`: PEM 文字列を直接入れる（prod の KMS / Secret Manager 経由の標準パス）。
+  # 両方未設定なら `KeyError` を投げる。`_FILE` が優先。
   def jwt_public_key
-    @jwt_public_key ||= OpenSSL::PKey::RSA.new(ENV.fetch("AUTHCORE_JWT_PUBLIC_KEY"))
+    @jwt_public_key ||= OpenSSL::PKey::RSA.new(jwt_public_key_pem)
+  end
+
+  def jwt_public_key_pem
+    if (path = ENV.fetch("AUTHCORE_JWT_PUBLIC_KEY_FILE", nil)).present?
+      File.read(path)
+    else
+      ENV.fetch("AUTHCORE_JWT_PUBLIC_KEY")
+    end
   end
 
   def expected_audience

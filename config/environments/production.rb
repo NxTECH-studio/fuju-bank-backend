@@ -83,4 +83,17 @@ Rails.application.configure do
 
   # Skip DNS rebinding protection for the default health check endpoint.
   config.host_authorization = { exclude: -> (request) { request.path == "/up" } }
+
+  # ActionCable: 本番 API ドメインを明示的に許可する。
+  # アンカー (\A / \z) を付けてサブドメイン詐称（例: api.fujupay.app.evil.com）への
+  # prefix 一致を防ぐ。force_ssl を有効化しているため http スキームは許可しない。
+  config.action_cable.allowed_request_origins = [
+    %r{\Ahttps://api\.fujupay\.app\z},
+  ]
+  # ネイティブアプリ (KMP 等) は Origin ヘッダが空 / 非 Web オリジンのため、リクエスト
+  # フォージェリ保護を無効化する。allowed_request_origins と二重の防御線になっており、
+  # 片方を緩和するときはもう片方の妥当性を再評価すること。
+  # 認証は ApplicationCable::Connection#connect で AuthCore JWT を検証する前提
+  # （Sec-WebSocket-Protocol subprotocol で配送）。
+  config.action_cable.disable_request_forgery_protection = true
 end

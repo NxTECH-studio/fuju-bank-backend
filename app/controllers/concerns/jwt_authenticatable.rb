@@ -33,11 +33,16 @@ module JwtAuthenticatable
 
   def authenticate!
     token = extract_bearer_token
-    raise AuthenticationError if token.blank?
-
-    @current_jwt_claims = decode_and_verify!(token)
+    @current_jwt_claims = Authcore::JwtVerifier.call(
+      token: token,
+      allowed_types: allowed_token_types,
+    )
     @current_external_user_id = @current_jwt_claims.fetch("sub")
     @current_actor_type = @current_jwt_claims.fetch("type")
+  end
+
+  def allowed_token_types
+    self.class.service_actor_allowed? ? [ACCESS_ACTOR, SERVICE_ACTOR] : [ACCESS_ACTOR]
   end
 
   def current_jwt_claims
@@ -72,29 +77,5 @@ module JwtAuthenticatable
 
     match = header.match(/\ABearer\s+(.+)\z/)
     match && match[1]
-  end
-
-  def decode_and_verify!(token)
-    payload, _header = JWT.decode(
-      token,
-      Authcore.jwt_public_key,
-      true,
-      {
-        algorithm: "RS256",
-        verify_aud: true,
-        aud: Authcore.expected_audience,
-        verify_iss: true,
-        iss: Authcore.expected_issuer,
-        verify_expiration: true,
-        required_claims: ["sub"],
-      },
-    )
-
-    permitted = self.class.service_actor_allowed? ? [ACCESS_ACTOR, SERVICE_ACTOR] : [ACCESS_ACTOR]
-    raise AuthenticationError.new(message: "このエンドポイントでは type=#{payload['type']} は許可されていません") unless permitted.include?(payload["type"])
-
-    payload
-  rescue JWT::DecodeError, JWT::ExpiredSignature, JWT::InvalidAudError, JWT::InvalidIssuerError, JWT::MissingRequiredClaim
-    raise AuthenticationError
   end
 end
