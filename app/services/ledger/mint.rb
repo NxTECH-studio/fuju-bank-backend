@@ -1,7 +1,9 @@
 # ふじゅ〜の発行。system_issuance 口座から User 口座へ amount を移動する。
 # Artifact → User への発行を複式簿記として記帳し、同一トランザクションで残高キャッシュを更新する。
+# artifact は nil を許容する（fuju-emotion-model 由来の代理 mint は SNS content を
+# Bank に Artifact としてミラーせず metadata に content_id を入れる運用）。
 class Ledger::Mint
-  # @param artifact [Artifact]
+  # @param artifact [Artifact, nil]
   # @param user [User]
   # @param amount [Integer] 正の整数
   # @param idempotency_key [String]
@@ -12,7 +14,7 @@ class Ledger::Mint
     new(**).call
   end
 
-  def initialize(artifact:, user:, amount:, idempotency_key:, metadata: {}, occurred_at: Time.current)
+  def initialize(user:, amount:, idempotency_key:, artifact: nil, metadata: {}, occurred_at: Time.current)
     @artifact = artifact
     @user = user
     @amount = amount
@@ -34,7 +36,7 @@ class Ledger::Mint
       tx = LedgerTransaction.new(
         kind: "mint",
         idempotency_key: @idempotency_key,
-        artifact_id: @artifact.id,
+        artifact_id: @artifact&.id,
         metadata: @metadata,
         occurred_at: @occurred_at,
       )
