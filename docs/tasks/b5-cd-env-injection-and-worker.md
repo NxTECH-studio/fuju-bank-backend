@@ -31,37 +31,131 @@ bank backend は既に `https://api.fujupay.app` で稼働中。CD は `.github/
 - GitHub repo settings: Secrets / Variables 追加
 - 本番インフラ: 初回マイグレーション (Solid Cable) を 1 回実行
 
+## 現状（2026-05-06 時点・着手前のスナップショット）
+
+実装に入る前に必読。前提が初稿時点と変わっている。
+
+### AuthCore 本番デプロイ状態
+
+- **稼働中**: `https://auth.fujupay.app/`（タスク初稿の `authcore.fujupay.app` ではない、サブドメインは `auth`）
+- 疎通確認済み: `GET /healthz` → 200 / `POST /v1/auth/introspect`（Basic Auth 無し）→ 401 / `GET /v1/auth/introspect` → 405
+- JWKS endpoint なし (`/v1/.well-known/jwks.json` → 404)。**公開鍵は env 経由配布のみ**（`fuju-system-authentication/keys/jwt.public.pem` に PEM 実体がある）
+- AuthCore コードでは `iss="authcore"` / `aud="authcore"` の両方が `cmd/server/main.go:58-64` で **hardcode**。bank の `config/initializers/authcore.rb` のデフォルトと一致するので `AUTHCORE_EXPECTED_*` の登録は省略可
+
+### bank client 登録（**ハッカソン文脈で妥協**）
+
+- AuthCore に `clients` テーブル管理用の admin endpoint / seed CLI / migration **はいずれも無い**。新規 client を作るには Go CLI 追加 or psql 直 INSERT が必要
+- AuthCore には既に **`OAuthTest` テスト client が seed 済み**:
+  - `client_id` = `clientfortest`
+  - `client_secret` = `passwordfortest`
+- ハッカソン用途として、専用 client (`fuju-bank-backend`) を作らずに `clientfortest` をそのまま流用する判断（2026-05-06 ユーザー合意）。本番運用に切り替える場合は ⚠️ 別途 seed が必要
+
+### GitHub Secrets / Variables の登録状況
+
+| 名前 | スコープ | 値 / 状態 |
+|---|---|---|
+| `AUTHCORE_BASE_URL` | Org Variable | ✅ `https://auth.fujupay.app/`（末尾 `/` あり、`URI.join` で吸収されるので OK） |
+| `AUTHCORE_CLIENT_ID` | repo Variable | ✅ `clientfortest` |
+| `AUTHCORE_CLIENT_SECRET` | repo Secret | ✅ `passwordfortest` |
+| `JWT_PUBLIC` | Org Secret | ✅ 登録済（**注: 名前は `AUTHCORE_JWT_PUBLIC_KEY` ではなく `JWT_PUBLIC`**。AuthCore の公開鍵は bank/mining/SNS で共通なので Org-level に 1 個で済ませる方針） |
+| `AUTHCORE_EXPECTED_AUDIENCE` | — | ❌ 未登録（デフォルト `"authcore"` と一致するので不要） |
+| `AUTHCORE_EXPECTED_ISSUER` | — | ❌ 未登録（同上） |
+
+### cd.yml / compose.prod.yml の現状
+
+- `cd.yml` は既に `secrets.AUTHCORE_JWT_PUBLIC_KEY` を参照する形になっている（PR #78 / commit `3dde3a4`）が、**Org Secret 名は `JWT_PUBLIC`** なので **このままでは空文字が流れる**。マッピング修正が必須
+- `compose.prod.yml` の `web.environment:` には `AUTHCORE_JWT_PUBLIC_KEY: ${AUTHCORE_JWT_PUBLIC_KEY}` だけ既に入っている。残り 3 つ (`BASE_URL` / `CLIENT_ID` / `CLIENT_SECRET`) は未追加
+- `worker` service は未定義
+
+### main / develop のズレ
+
+- 直近の本番 CD run は 2026-04-28（PR #72）まで。PR #73〜#81（B1 / B2 / B3 / B5 関連の cd.yml 変更含む）は **すべて develop までで main 未 merge**
+- 本タスクの PR を merge した後、別途 release PR で `develop → main` を流さないと本番には何も届かない
+
 ## 実装ステップ
 
-1. **GitHub Secrets / Variables 登録**:
-   - Secret: `AUTHCORE_JWT_PUBLIC_KEY`（PEM、改行入り）/ `AUTHCORE_CLIENT_SECRET`
-   - Variable: `AUTHCORE_BASE_URL` / `AUTHCORE_CLIENT_ID` / `AUTHCORE_EXPECTED_AUDIENCE`(=authcore) / `AUTHCORE_EXPECTED_ISSUER`(=authcore)
-   - PEM 改行: `appleboy/ssh-action` で env 経由で渡すと改行が壊れるケースあり → **PEM を base64 で encode して GH Secret に保存し、SSH 越しに `echo $B64 | base64 -d > /tmp/jwt.pub` してからファイルマウント** が安全。あるいは host 側 `/etc/fuju-bank/secrets/.env` に手動配置で逃げる選択肢も runbook に書く。
+1. **GitHub Secrets / Variables 登録**: ✅ 完了済（上記表参照）。**追加作業なし**
 
 2. **`cd.yml` 更新**:
-   - `env:` と `appleboy/ssh-action` の `envs:` に AUTHCORE_* を追加（前項の base64 方式採用)。
-   - script: `export AUTHCORE_*` を追加して docker compose に流す。
+   - `env:` の `AUTHCORE_JWT_PUBLIC_KEY` を `${{ secrets.JWT_PUBLIC }}` に変更（Org Secret 名のマッピング）
+   - `env:` に新規追加:
+     ```yaml
+     AUTHCORE_BASE_URL: ${{ vars.AUTHCORE_BASE_URL }}
+     AUTHCORE_CLIENT_ID: ${{ vars.AUTHCORE_CLIENT_ID }}
+     AUTHCORE_CLIENT_SECRET: ${{ secrets.AUTHCORE_CLIENT_SECRET }}
+     ```
+   - `appleboy/ssh-action` の `envs:` リストに 3 つ追加
+   - `script:` 内 `export` 行に 3 つ追加
+   - PEM 改行問題は **PEM 直貼り運用** で進める（Org Secret `JWT_PUBLIC` に既に直貼り済の前提）。base64 経由は不採用
 
 3. **`compose.prod.yml` 更新**:
-   - `web` service の `environment:` に AUTHCORE_* を追加。
-   - 必要なら `worker` service を追加: `command: bundle exec rake solid_queue:start`、同じ image を再利用。
-   - Solid Cable は ActionCable adapter として `web` 内で動くので独立 service 不要。ただし初回 `solid_cable_messages` テーブル作成が必要なら一回限り migrate を runbook 化。
+   - `web.environment:` に 3 行追加:
+     ```yaml
+     AUTHCORE_BASE_URL: ${AUTHCORE_BASE_URL}
+     AUTHCORE_CLIENT_ID: ${AUTHCORE_CLIENT_ID}
+     AUTHCORE_CLIENT_SECRET: ${AUTHCORE_CLIENT_SECRET}
+     ```
+   - `worker` service の追加は **ハッカソンでは判断保留**。現状 send/mint で Active Job を使っていないなら無くても動く。要否は Gemfile/コードを覗いて決める。Solid Cable のテーブル作成は Schemafile に既にあれば不要
 
-4. **runbook 作成** (`docs/runbooks/deploy.md`):
-   - 通常デプロイ手順 (cd.yml が走る)
-   - secrets ローテーション手順（`AUTHCORE_JWT_PUBLIC_KEY` 等を更新する流れ）
-   - 初回 Solid Cable migrate コマンド
-   - ロールバック手順 (`git revert` → cd.yml 再 trigger)
+4. **runbook 作成** (`docs/runbooks/deploy.md`): **ハッカソンでは省略可**。本番運用に切り替えるタイミングで書く
 
 5. **CLAUDE.md 更新**:
-   - 「デプロイ: Kamal」を「GitHub Actions cd.yml + docker compose on Proxmox CT (Tailscale + SSH)」に書き換え。
-   - `.kamal/` ディレクトリの扱い（残骸として残しておく / 削除）を判断。
+   - 「デプロイ: Kamal」を「GitHub Actions cd.yml + docker compose on Proxmox CT (Tailscale + SSH)」に書き換え
+   - `.kamal/` ディレクトリの扱いは判断保留（無害なら残す）
 
 ## 検証チェックリスト
 
-- [ ] cd.yml の dry-run（`act` or push to feature branch）で AUTHCORE_* が渡る
-- [ ] 本番 web コンテナで `printenv | grep AUTHCORE` が全部見える
-- [ ] B1 / B2 を merge した直後に本番 boot が成功する
-- [ ] `worker` コンテナがログ出力中
+- [ ] cd.yml の dry-run（`act` or feature branch push）で `AUTHCORE_BASE_URL` / `CLIENT_ID` / `CLIENT_SECRET` / `JWT_PUBLIC_KEY` の 4 つが渡る
+- [ ] 本番 web コンテナで `printenv | grep AUTHCORE` で 4 つ見える
+- [ ] B1 / B2 と一緒に main へ流して本番 boot が成功する
 - [ ] `https://api.fujupay.app/up` が 200
-- [ ] CLAUDE.md / runbook が現行と一致
+- [ ] `script/check_authcore.rb` を本番 base_url で叩いて register/login/introspect が緑
+- [ ] CLAUDE.md がデプロイ手段の実態と一致
+
+## ⚠️ 本番運用化する際の TODO（ハッカソン後）
+
+- `clientfortest` / `passwordfortest` を捨て、`fuju-bank-backend` 専用 client を AuthCore に seed
+- AuthCore に seed CLI を PR で追加（mining / SNS の client 追加でも使う）
+- `docs/runbooks/deploy.md` を起こす
+- worker service の要否を再評価（Active Job 利用が出てきたら追加）
+
+## 議論の経緯（2026-05-06 セッションでの決定事項）
+
+実装着手時に「なぜそうなっているか」が辿れるように、セッションでの判断とその理由を残す。
+
+### URL のサブドメインが `auth` であって `authcore` ではない
+
+- タスク初稿は `https://authcore.fujupay.app` だったが、Org Variable 登録時に `https://auth.fujupay.app/` で確定
+- 末尾スラッシュは bank の `Authcore::IntrospectionClient#post_introspect` が `URI.join(base_url, "/v1/auth/introspect")` で結合するため吸収される（`URI.join` の挙動: 第二引数が絶対パスなら base のパス部を置き換える）。検証済み
+
+### Org Secret 名が `AUTHCORE_JWT_PUBLIC_KEY` ではなく `JWT_PUBLIC`
+
+- AuthCore の公開鍵は **bank / mining / SNS の 3 リポジトリすべてで同じ値を読む**
+- Org-level に 1 個だけ `JWT_PUBLIC` として置き、各 repo の cd.yml が好きな env 変数名にマップする方が Org Secret 一覧が肥大化しない
+- repo 内のアプリコード (`config/initializers/authcore.rb`) が読む env 変数名は `AUTHCORE_JWT_PUBLIC_KEY` のままで OK。**翻訳は cd.yml が担当**
+- 命名の一貫性 (`AUTHCORE_*` プレフィックス揃え) より、Org-shared な値を short name で持つ方を優先した
+
+### `AUTHCORE_EXPECTED_AUDIENCE` / `AUTHCORE_EXPECTED_ISSUER` を登録していない
+
+- AuthCore の `cmd/server/main.go:58-64` で `iss="authcore"` / `aud="authcore"` が hardcode
+- bank の `config/initializers/authcore.rb:27-32` のデフォルトも両方 `"authcore"`
+- 値が一致するので登録不要。明示しても害はないが、ハッカソンでは省略
+
+### bank 専用 client を作らずテスト client を流用する
+
+- AuthCore は admin endpoint も seed CLI も migration も持たない → bank 用 client を作るには「Go CLI を新規 PR で追加」か「CT で psql 直 INSERT」のどちらかが必要
+- ハッカソン期間内ではこのコストを払わない判断
+- AuthCore 側に既に居る `OAuthTest` (`clientfortest` / `passwordfortest`) で疎通する
+- ⚠️ secret が辞書語なのでブルートフォース耐性なし。本番運用ではこの client を必ず捨てる
+
+### worker service / runbook / `.kamal/` の扱い
+
+- Solid Queue worker は現状 Gemfile には居るが、本番で worker プロセスが立っていない可能性が高い。ただし送金/mint で Active Job を使っていないなら今は不要 → ハッカソンでは判断保留
+- `docs/runbooks/deploy.md` 新規作成と CLAUDE.md の Kamal → cd.yml 書き換えはハッカソンでは省略可。CLAUDE.md は実態と乖離している部分だけ最低限直す
+- `.kamal/` ディレクトリが残っていても無害なので削除はしない
+
+### develop と main のズレ
+
+- 直近の本番 CD run は 2026-04-28（PR #72）まで。PR #73〜#81（B1 / B2 / B3 / B5 関連の cd.yml 変更含む）は develop には居るが main には未 merge
+- 本タスクの PR が develop に merge されただけでは本番に届かない。**release PR (`develop → main`) を流す手順がセット**
+- これは B5 タスクの責務外だが、検証時に「main へ反映するまで」の動線を意識する必要あり
