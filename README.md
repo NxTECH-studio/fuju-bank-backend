@@ -223,10 +223,10 @@ bin/rails server
 | `DB_HOST` | PostgreSQL ホスト | `db`（コンテナ名） |
 | `DB_USERNAME` | PostgreSQL ユーザー名 | `fuju_bank_backend` |
 | `DB_PASSWORD` | PostgreSQL パスワード | `password` |
-| `AUTHCORE_JWT_PUBLIC_KEY` | AuthCore が発行する JWT の検証用公開鍵（PEM 文字列）。改行は `\n` エスケープで投入 | （secret 経由で注入） |
+| `AUTHCORE_JWT_PUBLIC_KEY` | AuthCore が発行する JWT の検証用公開鍵（PEM 文字列、`-----BEGIN PUBLIC KEY-----` から `-----END PUBLIC KEY-----` まで改行を含めてそのまま投入） | （secret 経由で注入） |
 | `AUTHCORE_EXPECTED_ISSUER` | 許容する JWT の `iss` クレーム | `authcore` |
 | `AUTHCORE_EXPECTED_AUDIENCE` | 許容する JWT の `aud` クレーム | `authcore` |
-| `AUTHCORE_BASE_URL` | AuthCore のベース URL（introspection の呼び先） | `https://auth.fuju.example` |
+| `AUTHCORE_BASE_URL` | AuthCore のベース URL（introspection の呼び先） | `https://auth.fujupay.app` |
 | `AUTHCORE_CLIENT_ID` | introspection 呼び出し時の Basic 認証 client_id | （AuthCore から受領） |
 | `AUTHCORE_CLIENT_SECRET` | introspection 呼び出し時の Basic 認証 client_secret | （AuthCore から受領、secret 経由で注入） |
 

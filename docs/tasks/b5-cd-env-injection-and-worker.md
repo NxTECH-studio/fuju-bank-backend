@@ -55,8 +55,8 @@ bank backend は既に `https://api.fujupay.app` で稼働中。CD は `.github/
 | 名前 | スコープ | 値 / 状態 |
 |---|---|---|
 | `AUTHCORE_BASE_URL` | Org Variable | ✅ `https://auth.fujupay.app/`（末尾 `/` あり、`URI.join` で吸収されるので OK） |
-| `AUTHCORE_CLIENT_ID` | repo Variable | ✅ `clientfortest` |
-| `AUTHCORE_CLIENT_SECRET` | repo Secret | ✅ `passwordfortest` |
+| `AUTHCORE_CLIENT_ID` | Repo Variable | ✅ `clientfortest` |
+| `AUTHCORE_CLIENT_SECRET` | Repo Secret | ✅ `passwordfortest` |
 | `JWT_PUBLIC` | Org Secret | ✅ 登録済（**注: 名前は `AUTHCORE_JWT_PUBLIC_KEY` ではなく `JWT_PUBLIC`**。AuthCore の公開鍵は bank/mining/SNS で共通なので Org-level に 1 個で済ませる方針） |
 | `AUTHCORE_EXPECTED_AUDIENCE` | — | ❌ 未登録（デフォルト `"authcore"` と一致するので不要） |
 | `AUTHCORE_EXPECTED_ISSUER` | — | ❌ 未登録（同上） |
