@@ -505,7 +505,6 @@ class ActionCableClient # rubocop:disable Style/OneClassPerFile
   end
 end
 
-# rubocop:disable Rails/Exit
 begin
   E2ESmoke.new(config: E2ESmoke::Config.load).run
   exit 0
@@ -517,4 +516,3 @@ rescue StandardError => e
   warn e.backtrace.first(10).join("\n")
   exit 1
 end
-# rubocop:enable Rails/Exit
