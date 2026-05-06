@@ -180,7 +180,7 @@ transfer (User → User):
 | バックグラウンドジョブ | Solid Queue |
 | キャッシュ | Solid Cache |
 | リアルタイム配信 | Solid Cable / ActionCable |
-| デプロイ | Kamal (Docker) |
+| デプロイ | GitHub Actions + docker compose on Proxmox CT |
 | テスト | RSpec, FactoryBot, database_rewinder, bullet |
 | Lint | RuboCop |
 | セキュリティ | Brakeman, bundler-audit |
@@ -230,9 +230,10 @@ bin/rails server
 | `AUTHCORE_CLIENT_ID` | introspection 呼び出し時の Basic 認証 client_id | （AuthCore から受領） |
 | `AUTHCORE_CLIENT_SECRET` | introspection 呼び出し時の Basic 認証 client_secret | （AuthCore から受領、secret 経由で注入） |
 
-> `AUTHCORE_JWT_PUBLIC_KEY` / `AUTHCORE_CLIENT_SECRET` は機密情報。Docker / Kamal では
-> secret 経由で注入し、`.env` にコミットしないこと。テスト環境では `spec/rails_helper.rb` が
-> `TestKeypair.public_key_pem` と固定値を自動注入するため、開発者側での設定は不要。
+> `AUTHCORE_JWT_PUBLIC_KEY` / `AUTHCORE_CLIENT_SECRET` は機密情報。本番では GitHub Secrets
+> から `cd.yml` 経由で `compose.prod.yml` の `web` コンテナに注入し、`.env` にコミットしない
+> こと。テスト環境では `spec/rails_helper.rb` が `TestKeypair.public_key_pem` と固定値を
+> 自動注入するため、開発者側での設定は不要。
 
 ## 開発コマンド（Makefile）
 
@@ -293,7 +294,9 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 
 ## デプロイ
 
-- **Kamal**（Docker ベース）。設定は `config/deploy.yml` と `Dockerfile.prod`（本番イメージ用）。
+- **GitHub Actions + docker compose**: `main` への push をトリガに `.github/workflows/cd.yml`
+  が Tailscale + SSH で Proxmox CT に入り、`docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build`
+  を実行。本番イメージは `Dockerfile.prod`。
 - **ブランチ戦略**: `develop` をデフォルトブランチとし、`feat/xxx` を `develop` から切って PR。
   `develop → main` のリリース PR は GitHub Actions で自動生成・更新されます。
 - **本番ブランチ**: `main`（ブランチ保護あり、直接 push 禁止）。
