@@ -1,9 +1,7 @@
-# This file should ensure the existence of records required to run the application in every environment (production,
-# development, test). The code here should be idempotent so that it can be executed at any point in every environment.
-# The data can then be loaded with the bin/rails db:seed command (or created alongside the database with db:setup).
+# db/seeds.rb は `bin/rails db:seed` から読まれるエントリポイント。
+# 個別 seed は `db/seeds/` 配下に分割し、ここから一括 load する。
 #
-# Example:
-#
-#   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
-#     MovieGenre.find_or_create_by!(name: genre_name)
-#   end
+# 各 seed は `find_or_create_by!` 等で idempotent に書くこと
+# （CD で deploy 毎に走る想定）。
+
+Rails.root.glob("db/seeds/*.rb").each { |path| load path }

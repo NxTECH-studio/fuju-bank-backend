@@ -30,12 +30,13 @@ ps: ## コンテナ状態を表示
 
 .PHONY: setup db/create db/schema/apply db/reset
 
-setup: build ## 初回セットアップ（ビルド→起動→DB作成→スキーマ適用）
+setup: build ## 初回セットアップ（ビルド→起動→DB作成→スキーマ適用→seed）
 	docker compose up -d --wait
 	docker compose exec web bundle install
 	docker compose exec web bin/rails db:create || true  # DB既存の場合を許容
 	docker compose exec web bundle exec ridgepole -c config/database.yml -E development --apply -f db/Schemafile
 	docker compose exec web bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
+	docker compose exec web bin/rails db:seed
 
 db/create: ## DB作成
 	docker compose exec web bin/rails db:create
@@ -44,10 +45,11 @@ db/schema/apply: ## Ridgepoleでスキーマ適用（dev + test）
 	docker compose exec web bundle exec ridgepole -c config/database.yml -E development --apply -f db/Schemafile
 	docker compose exec web bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 
-db/reset: ## DBをドロップして再作成
+db/reset: ## DBをドロップして再作成（seed まで実行）
 	docker compose exec web bin/rails db:drop db:create
 	docker compose exec web bundle exec ridgepole -c config/database.yml -E development --apply -f db/Schemafile
 	docker compose exec web bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
+	docker compose exec web bin/rails db:seed
 
 # --------------------------------------------------
 # Rails
