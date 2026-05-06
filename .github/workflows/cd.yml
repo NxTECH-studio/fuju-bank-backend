@@ -48,3 +48,6 @@ jobs:
             docker compose down || true
             docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build
             docker compose -p fuju-bank-prod -f compose.prod.yml exec -T web bundle exec ridgepole -c config/database.yml -E production -s primary --apply -f db/Schemafile
+            # system_issuance 口座など、mint の前提となる必須レコードを投入する。
+            # seed は idempotent（find_or_create_by!）なので毎 deploy で再実行して問題ない。
+            docker compose -p fuju-bank-prod -f compose.prod.yml exec -T web bin/rails db:seed
