@@ -30,6 +30,9 @@ services:
       # 本番値は `.env` から流し込む（dev compose.yml と異なり、ここでは秘匿運用なので
       # PEM をリポジトリに直書きしない）。鍵ローテーション時は `.env` を差し替えて再起動。
       AUTHCORE_JWT_PUBLIC_KEY: ${AUTHCORE_JWT_PUBLIC_KEY}
+      AUTHCORE_BASE_URL: ${AUTHCORE_BASE_URL}
+      AUTHCORE_CLIENT_ID: ${AUTHCORE_CLIENT_ID}
+      AUTHCORE_CLIENT_SECRET: ${AUTHCORE_CLIENT_SECRET}
     ports:
       - "127.0.0.1:3000:80"
     depends_on:
