@@ -93,7 +93,7 @@ Rails.application.configure do
   # ネイティブアプリ (KMP 等) は Origin ヘッダが空 / 非 Web オリジンのため、リクエスト
   # フォージェリ保護を無効化する。allowed_request_origins と二重の防御線になっており、
   # 片方を緩和するときはもう片方の妥当性を再評価すること。
-  # 認証は ApplicationCable::Connection#connect 側で別途行う前提。
-  # TODO: AuthCore による接続認証を実装したら本設定とコメントを見直す（auth-strategy-decision.md）。
+  # 認証は ApplicationCable::Connection#connect で AuthCore JWT を検証する前提
+  # （Sec-WebSocket-Protocol subprotocol で配送）。
   config.action_cable.disable_request_forgery_protection = true
 end

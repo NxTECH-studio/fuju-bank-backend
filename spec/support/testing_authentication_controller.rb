@@ -4,6 +4,8 @@ class TestingAuthenticationController < ApplicationController
   end
 
   def me
+    raise AuthenticationError unless current_user
+
     render(json: { id: current_user.id, external_user_id: current_user.external_user_id }, status: :ok)
   end
 end

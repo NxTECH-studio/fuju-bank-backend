@@ -23,24 +23,23 @@ RSpec.describe "Authentication", :skip_default_auth, type: :request do
     end
   end
 
-  describe "lazy user プロビジョニング" do
-    it "新規 sub の JWT で /me を叩くと User が 1 件生えて 200 を返す" do
-      expect do
-        get("/testing_authentication/me", headers: auth_headers(sub: sub))
-      end.to change { User.count }.by(1)
+  describe "current_user 解決" do
+    it "プロビジョニング済みなら 200 と User 情報を返す" do
+      user = create(:user, external_user_id: sub)
 
-      expect(response).to have_http_status(:ok)
-      expect(response.parsed_body["external_user_id"]).to eq(sub)
-    end
-
-    it "同じ sub で 2 回目のリクエストは User は増えない" do
       get("/testing_authentication/me", headers: auth_headers(sub: sub))
 
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to include("id" => user.id, "external_user_id" => sub)
+    end
+
+    it "未プロビジョニングなら 401 UNAUTHENTICATED を返す（lazy provision は POST /users/me 限定）" do
       expect do
         get("/testing_authentication/me", headers: auth_headers(sub: sub))
       end.not_to(change { User.count })
 
-      expect(response).to have_http_status(:ok)
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")
     end
   end
 

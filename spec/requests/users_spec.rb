@@ -1,12 +1,13 @@
 require "rails_helper"
 
 RSpec.describe "Users", type: :request do
-  describe "POST /users" do
-    let!(:external_user_id) { "01HZZZZZZZZZZZZZZZZZZZZZZZ" }
+  # AuthenticatedRequest が auth_headers の既定 sub を注入する
+  let!(:default_sub) { "01HYZ0000000000000000000AA" }
 
-    context "正常系" do
+  describe "POST /users/me" do
+    context "新規プロビジョニング" do
       it "User と Account を 1 件ずつ作成し 201 を返す" do
-        expect { post("/users", params: { user: { external_user_id: external_user_id, name: "Alice" } }) }
+        expect { post("/users/me", params: { name: "Alice" }) }
           .to change { User.count }.by(1)
           .and change { Account.count }.by(1)
 
@@ -22,8 +23,15 @@ RSpec.describe "Users", type: :request do
         expect(parsed["created_at"]).to match(/\A\d{4}-\d{2}-\d{2}T/)
       end
 
+      it "external_user_id は JWT の sub から取られる（body 値は無視される）" do
+        post("/users/me", params: { external_user_id: "01HZZZZZZZZZZZZZZZZZZZZZZZ", name: "Alice" })
+
+        expect(response).to have_http_status(:created)
+        expect(User.last.external_user_id).to eq(default_sub)
+      end
+
       it "作成された Account は kind=user / balance_fuju=0 で初期化される" do
-        post("/users", params: { user: { external_user_id: external_user_id, name: "Alice" } })
+        post("/users/me", params: { name: "Alice" })
 
         account = User.last.account
         expect(account.kind).to eq("user")
@@ -31,56 +39,62 @@ RSpec.describe "Users", type: :request do
       end
 
       it "public_key を指定した場合もレスポンスに反映される" do
-        post("/users", params: { user: { external_user_id: external_user_id, name: "Bob", public_key: "pk_abc" } })
+        post("/users/me", params: { name: "Bob", public_key: "pk_abc" })
 
         expect(response).to have_http_status(:created)
         expect(response.parsed_body).to include("name" => "Bob", "public_key" => "pk_abc")
       end
 
-      it "name を省略した場合も 201 を返す（lazy プロビジョニング想定）" do
-        expect { post("/users", params: { user: { external_user_id: external_user_id } }) }
+      it "name 未指定でも 201 を返す" do
+        expect { post("/users/me") }
           .to change { User.count }.by(1)
 
         expect(response).to have_http_status(:created)
         expect(response.parsed_body).to include("name" => nil)
       end
+
+      it "name に空文字を渡してもそのまま受け入れる（モデル側に長さ制約なし）" do
+        post("/users/me", params: { name: "" })
+
+        expect(response).to have_http_status(:created)
+        expect(response.parsed_body).to include("name" => "")
+      end
     end
 
-    context "異常系" do
-      it "external_user_id が不正な形式のとき 422 VALIDATION_FAILED を返す" do
-        expect { post("/users", params: { user: { external_user_id: "not-a-ulid", name: "Alice" } }) }
+    context "既存（idempotent）" do
+      let!(:existing_user) { create(:user, external_user_id: default_sub, name: "Original", public_key: "pk_original") }
+
+      it "二度目以降は User を増やさず 200 を返す" do
+        expect { post("/users/me", params: { name: "Updated" }) }
           .not_to(change { User.count })
 
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+        expect(response).to have_http_status(:ok)
       end
 
-      it "external_user_id が欠落しているとき 422 VALIDATION_FAILED を返す" do
-        expect { post("/users", params: { user: { name: "Alice" } }) }
-          .not_to(change { User.count })
+      it "既存ユーザーの属性は body 値で上書きされない" do
+        post("/users/me", params: { name: "Updated", public_key: "pk_updated" })
 
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original")
+        expect(response.parsed_body).to include("name" => "Original", "public_key" => "pk_original")
       end
+    end
 
-      it "external_user_id が重複しているとき 422 VALIDATION_FAILED を返す" do
-        create(:user, external_user_id: external_user_id)
+    context "認証" do
+      it "Authorization ヘッダがない場合 401 を返す", :skip_default_auth do
+        post("/users/me", params: { name: "Alice" })
 
-        expect { post("/users", params: { user: { external_user_id: external_user_id, name: "Bob" } }) }
-          .not_to(change { User.count })
-
-        expect(response).to have_http_status(:unprocessable_entity)
-        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")
       end
     end
   end
 
-  describe "GET /users/:id" do
-    context "正常系" do
-      let!(:user) { create(:user, name: "Alice", public_key: "pk_abc") }
+  describe "GET /users/me" do
+    context "プロビジョニング済み" do
+      let!(:user) { create(:user, external_user_id: default_sub, name: "Alice", public_key: "pk_abc") }
 
-      it "200 と User 情報・残高を返す" do
-        get("/users/#{user.id}")
+      it "200 と User 情報を返す" do
+        get("/users/me")
 
         expect(response).to have_http_status(:ok)
         parsed = response.parsed_body
@@ -96,24 +110,46 @@ RSpec.describe "Users", type: :request do
       it "account.balance_fuju の値を反映する" do
         user.account.update!(balance_fuju: 1234)
 
-        get("/users/#{user.id}")
+        get("/users/me")
 
-        expect(response).to have_http_status(:ok)
         expect(response.parsed_body).to include("balance_fuju" => 1234)
       end
     end
 
-    context "異常系" do
-      it "存在しない ID のとき 404 NOT_FOUND を返す" do
-        get("/users/999999")
+    context "未プロビジョニング" do
+      it "401 UNAUTHENTICATED を返す" do
+        get("/users/me")
 
-        expect(response).to have_http_status(:not_found)
-        expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")
       end
     end
+  end
 
-    context "認証ポリシー" do
-      let!(:user) { create(:user) }
+  describe "GET /users/:id" do
+    context "自分の id" do
+      let!(:user) { create(:user, external_user_id: default_sub, name: "Alice", public_key: "pk_abc") }
+
+      it "200 と User 情報・残高を返す" do
+        get("/users/#{user.id}")
+
+        expect(response).to have_http_status(:ok)
+        parsed = response.parsed_body
+        expect(parsed).to include(
+          "id" => user.id,
+          "name" => "Alice",
+          "public_key" => "pk_abc",
+          "balance_fuju" => 0,
+        )
+      end
+
+      it "account.balance_fuju の値を反映する" do
+        user.account.update!(balance_fuju: 1234)
+
+        get("/users/#{user.id}")
+
+        expect(response.parsed_body).to include("balance_fuju" => 1234)
+      end
 
       it "参照系では AuthCore introspection が呼ばれない" do
         stub = stub_active_introspection
@@ -122,6 +158,47 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:ok)
         expect(stub).not_to have_been_requested
+      end
+    end
+
+    context "他人の id" do
+      let!(:me) { create(:user, external_user_id: default_sub) }
+      let!(:other) { create(:user, external_user_id: "01HYZ0000000000000000000BB") }
+
+      it "403 FORBIDDEN を返す" do
+        get("/users/#{other.id}")
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body.dig("error", "code")).to eq("FORBIDDEN")
+      end
+    end
+
+    context "存在しない id" do
+      let!(:me) { create(:user, external_user_id: default_sub) }
+
+      it "他人扱いとして 403 FORBIDDEN を返す" do
+        get("/users/999999")
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body.dig("error", "code")).to eq("FORBIDDEN")
+      end
+
+      it "非数値の id でも 403 FORBIDDEN を返す（to_i による偽陽性なし）" do
+        get("/users/abc")
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body.dig("error", "code")).to eq("FORBIDDEN")
+      end
+    end
+
+    context "未プロビジョニング" do
+      let!(:other) { create(:user, external_user_id: "01HYZ0000000000000000000BB") }
+
+      it "401 UNAUTHENTICATED を返す" do
+        get("/users/#{other.id}")
+
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")
       end
     end
   end

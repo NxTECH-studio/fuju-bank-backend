@@ -13,7 +13,10 @@ class LedgerTransaction < ApplicationRecord
   validates :kind, inclusion: { in: KINDS }
   validates :idempotency_key, presence: true, uniqueness: true
   validates :occurred_at, presence: true
-  validates :artifact_id, presence: true, if: :mint_kind?
+  # mint は Artifact 紐付けが推奨だが必須ではない:
+  # fuju-emotion-model 由来の代理 mint は SNS 側 content を Artifact として
+  # ミラーしないため artifact_id=nil で記帳される（content_id は metadata 側に
+  # 入れて補完する運用）。transfer は今まで通り Artifact 紐付け禁止。
   validates :artifact_id, absence: true, if: :transfer_kind?
   validate :entries_sum_must_be_zero
   validate :must_have_at_least_two_entries

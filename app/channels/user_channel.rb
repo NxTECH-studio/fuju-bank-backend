@@ -1,15 +1,9 @@
 # User 単位のリアルタイム配信チャネル。
-# 接続時に user_id を受け取り、該当 User の broadcast を stream する。
-#
-# TODO: 認証は将来拡張（HUD の public_key 署名検証）
+# `ApplicationCable::Connection` が確立した `current_user` の broadcast のみを stream する。
+# 他人の channel を購読する経路は構造的に存在しない。
 class UserChannel < ApplicationCable::Channel
   def subscribed
-    user = User.find_by(id: params[:user_id])
-    if user.nil?
-      reject
-    else
-      stream_for user
-    end
+    stream_for current_user
   end
 
   def unsubscribed; end

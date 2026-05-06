@@ -65,7 +65,7 @@ transfer (User → User):
 | `GET` | `/users/:id/transactions` | 取引履歴（mint / transfer 統合） | ローカル JWT |
 | `POST` | `/artifacts` | Artifact 作成 | ローカル JWT |
 | `GET` | `/artifacts/:id` | Artifact 情報 | ローカル JWT |
-| `POST` | `/ledger/mint` | 発行（マイニング層から） | ローカル JWT + introspection |
+| `POST` | `/ledger/mint` | 発行（マイニング層から） | ローカル JWT + introspection（service token は `mint:creator_payouts` scope 必須） |
 | `POST` | `/ledger/transfer` | 送金（User → User） | ローカル JWT + introspection |
 
 > 認証ポリシーの詳細は [認証（AuthCore 連携）](#認証authcore-連携) を参照。
@@ -97,6 +97,7 @@ transfer (User → User):
 | `TOKEN_INACTIVE` | 401 | introspection で `active=false`（revoke 済み） |
 | `AUTHCORE_UNAVAILABLE` | 503 | AuthCore への問い合わせが 5xx / タイムアウト |
 | `MFA_REQUIRED` | 403 | MFA 未検証トークンで `MfaRequired` 適用 action を叩いた |
+| `FORBIDDEN` | 403 | scope 不足（service token が必要 scope を持たない 等） |
 | `INTERNAL_ERROR` | 500 | 想定外エラー |
 
 ## リアルタイム配信（ActionCable / UserChannel）
@@ -135,12 +136,28 @@ transfer (User → User):
 - **JWT ローカル検証**: `Authorization: Bearer <jwt>` を `JwtAuthenticatable` concern で検証。
   署名（RS256, `AUTHCORE_JWT_PUBLIC_KEY`）、`exp`、`type=access`、`aud`、`iss` を確認し、
   `current_external_user_id` / `current_user` をコントローラに供給します。
+  クラスレベルで `service_actor_allowed!` を宣言したコントローラは追加で `type=service`
+  も受理し、`current_actor_type` で actor 種別を区別できます（`LedgerController#mint`
+  が代理 mint のために有効化）。
 - **Lazy プロビジョニング**: JWT 検証成功時、`sub` に対応する `User` が無ければ
   `UserProvisioner` が `User` + `Account(kind: "user")` をその場で作成します（`after_create` フック経由）。
   並行リクエストによる重複は `ActiveRecord::RecordNotUnique` rescue で吸収します。
 - **Introspection（金銭移動系のみ）**: `POST /ledger/mint` / `POST /ledger/transfer` には
   `IntrospectionRequired` concern を適用し、AuthCore の `POST /v1/auth/introspect` を毎回呼んで
   `active=true` を確認します。revoke 済みトークンは 401、AuthCore 不達は 503 + `AUTHCORE_UNAVAILABLE`。
+- **Scope ベースの代理 mint authz**: `POST /ledger/mint` を service token で呼ぶ場合、
+  AuthCore introspect の `scope` クレームに `mint:creator_payouts` を含むことを要求します。
+  scope 不足は 403 `FORBIDDEN`。ユーザートークン経路（既存 MVP）には scope 検査は
+  かかりません。fuju-emotion-model などの上位サービスは AuthCore の `clients.allowed_scope`
+  に当該 scope を登録した上で `POST /oauth/token` から service token を取得して呼びます。
+- **mint 受取人 ID の cross-service 一致保証**: `POST /ledger/mint` の `user_id`
+  パラメータは **AuthCore の `sub`（= `users.external_user_id`、ULID 26 文字）** を
+  期待します。Bank 内部の autoincrement PK (`users.id`) は受け付けません。これにより
+  SNS の作者 ID（= AuthCore sub）と Bank の受取口座が cross-service で一意に対応
+  することが保証されます。Bank に該当 User が未登録なら `UserProvisioner` で
+  lazy 作成されるため、creator がまだ Bank HUD にログインしていなくても代理 mint
+  が成立します。`artifact_id` は任意で、未指定時は `ledger_transactions.artifact_id`
+  は NULL のまま記帳します（content_id 等の追跡情報は metadata JSONB に乗せる）。
 - **MFA ゲート**: `MfaRequired` concern を用意済み。`introspection_result.mfa_verified` が
   偽のとき 403 + `MFA_REQUIRED`。適用対象は将来（高額 transfer 等）に拡張可能。
 
@@ -163,7 +180,7 @@ transfer (User → User):
 | バックグラウンドジョブ | Solid Queue |
 | キャッシュ | Solid Cache |
 | リアルタイム配信 | Solid Cable / ActionCable |
-| デプロイ | Kamal (Docker) |
+| デプロイ | GitHub Actions + docker compose on Proxmox CT |
 | テスト | RSpec, FactoryBot, database_rewinder, bullet |
 | Lint | RuboCop |
 | セキュリティ | Brakeman, bundler-audit |
@@ -206,16 +223,17 @@ bin/rails server
 | `DB_HOST` | PostgreSQL ホスト | `db`（コンテナ名） |
 | `DB_USERNAME` | PostgreSQL ユーザー名 | `fuju_bank_backend` |
 | `DB_PASSWORD` | PostgreSQL パスワード | `password` |
-| `AUTHCORE_JWT_PUBLIC_KEY` | AuthCore が発行する JWT の検証用公開鍵（PEM 文字列）。改行は `\n` エスケープで投入 | （secret 経由で注入） |
+| `AUTHCORE_JWT_PUBLIC_KEY` | AuthCore が発行する JWT の検証用公開鍵（PEM 文字列、`-----BEGIN PUBLIC KEY-----` から `-----END PUBLIC KEY-----` まで改行を含めてそのまま投入） | （secret 経由で注入） |
 | `AUTHCORE_EXPECTED_ISSUER` | 許容する JWT の `iss` クレーム | `authcore` |
 | `AUTHCORE_EXPECTED_AUDIENCE` | 許容する JWT の `aud` クレーム | `authcore` |
-| `AUTHCORE_BASE_URL` | AuthCore のベース URL（introspection の呼び先） | `https://auth.fuju.example` |
+| `AUTHCORE_BASE_URL` | AuthCore のベース URL（introspection の呼び先） | `https://auth.fujupay.app` |
 | `AUTHCORE_CLIENT_ID` | introspection 呼び出し時の Basic 認証 client_id | （AuthCore から受領） |
 | `AUTHCORE_CLIENT_SECRET` | introspection 呼び出し時の Basic 認証 client_secret | （AuthCore から受領、secret 経由で注入） |
 
-> `AUTHCORE_JWT_PUBLIC_KEY` / `AUTHCORE_CLIENT_SECRET` は機密情報。Docker / Kamal では
-> secret 経由で注入し、`.env` にコミットしないこと。テスト環境では `spec/rails_helper.rb` が
-> `TestKeypair.public_key_pem` と固定値を自動注入するため、開発者側での設定は不要。
+> `AUTHCORE_JWT_PUBLIC_KEY` / `AUTHCORE_CLIENT_SECRET` は機密情報。本番では GitHub Secrets
+> から `cd.yml` 経由で `compose.prod.yml` の `web` コンテナに注入し、`.env` にコミットしない
+> こと。テスト環境では `spec/rails_helper.rb` が `TestKeypair.public_key_pem` と固定値を
+> 自動注入するため、開発者側での設定は不要。
 
 ## 開発コマンド（Makefile）
 
@@ -276,7 +294,9 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 
 ## デプロイ
 
-- **Kamal**（Docker ベース）。設定は `config/deploy.yml` と `Dockerfile`。
+- **GitHub Actions + docker compose**: `main` への push をトリガに `.github/workflows/cd.yml`
+  が Tailscale + SSH で Proxmox CT に入り、`docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build`
+  を実行。本番イメージは `Dockerfile.prod`。
 - **ブランチ戦略**: `develop` をデフォルトブランチとし、`feat/xxx` を `develop` から切って PR。
   `develop → main` のリリース PR は GitHub Actions で自動生成・更新されます。
 - **本番ブランチ**: `main`（ブランチ保護あり、直接 push 禁止）。

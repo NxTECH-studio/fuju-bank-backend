@@ -20,16 +20,29 @@ jobs:
           RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
           FUJU_BANK_BACKEND_DATABASE_PASSWORD: ${{ secrets.FUJU_BANK_BACKEND_DATABASE_PASSWORD }}
           ALLOWED_HOSTS: ${{ vars.ALLOWED_HOSTS }}
+          # AuthCore 公開鍵は bank/mining/SNS で共有するため Org-level Secret `JWT_PUBLIC` を使う。
+          # アプリ側 (config/initializers/authcore.rb) は `AUTHCORE_JWT_PUBLIC_KEY` を参照するため、
+          # ここで Org Secret 名 → アプリ env 名にリネームしてマッピングする。
+          AUTHCORE_JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC }}
+          AUTHCORE_BASE_URL: ${{ vars.AUTHCORE_BASE_URL }}
+          AUTHCORE_CLIENT_ID: ${{ vars.AUTHCORE_CLIENT_ID }}
+          AUTHCORE_CLIENT_SECRET: ${{ secrets.AUTHCORE_CLIENT_SECRET }}
         with:
           host: ${{ vars.TS_CLIENT_IP }}
           username: ${{ vars.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: RAILS_MASTER_KEY,FUJU_BANK_BACKEND_DATABASE_PASSWORD,ALLOWED_HOSTS
+          envs: RAILS_MASTER_KEY,FUJU_BANK_BACKEND_DATABASE_PASSWORD,ALLOWED_HOSTS,AUTHCORE_JWT_PUBLIC_KEY,AUTHCORE_BASE_URL,AUTHCORE_CLIENT_ID,AUTHCORE_CLIENT_SECRET
           script: |
             set -e
             cd /home/fuju/bank
             git pull origin main
-            export RAILS_MASTER_KEY FUJU_BANK_BACKEND_DATABASE_PASSWORD ALLOWED_HOSTS
+            # 必須 env が空だと boot は通って初回 auth で落ちる（Org Secret 共有漏れ等）。
+            # ここで fail-fast。値はログに出さず変数名のみ表示する。
+            # ALLOWED_HOSTS は compose.prod.yml で `${ALLOWED_HOSTS:-}` のフォールバックがあるため意図的に除外。
+            for v in RAILS_MASTER_KEY FUJU_BANK_BACKEND_DATABASE_PASSWORD AUTHCORE_JWT_PUBLIC_KEY AUTHCORE_BASE_URL AUTHCORE_CLIENT_ID AUTHCORE_CLIENT_SECRET; do
+              if [ -z "${!v}" ]; then echo "missing required env: $v" >&2; exit 1; fi
+            done
+            export RAILS_MASTER_KEY FUJU_BANK_BACKEND_DATABASE_PASSWORD ALLOWED_HOSTS AUTHCORE_JWT_PUBLIC_KEY AUTHCORE_BASE_URL AUTHCORE_CLIENT_ID AUTHCORE_CLIENT_SECRET
             # One-time cleanup of legacy dev-mode containers from the previous CD scheme.
             # No-op after the first successful switchover (default project has no containers).
             docker compose down || true

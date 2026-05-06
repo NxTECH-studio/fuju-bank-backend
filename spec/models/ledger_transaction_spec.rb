@@ -42,11 +42,10 @@ RSpec.describe LedgerTransaction, type: :model do
       expect(tx.errors[:idempotency_key]).to be_present
     end
 
-    it "kind=mint で artifact_id が nil の場合は invalid" do
+    it "kind=mint で artifact_id が nil でも valid（fuju 由来の代理 mint パス）" do
       tx = build_tx(kind: "mint")
       tx.artifact = nil
-      expect(tx).not_to be_valid
-      expect(tx.errors[:artifact_id]).to be_present
+      expect(tx).to be_valid
     end
 
     it "kind=transfer で artifact_id がある場合は invalid" do

@@ -8,7 +8,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5432:5432"
+      # AuthCore (`fuju-system-authentication`) の postgres がローカルで 5432 を使うため、
+      # 衝突回避でホスト側公開ポートを 5433 にずらしている。コンテナ内部の Rails web は
+      # `DB_HOST: db` で繋ぐので 5432 のまま。host から psql する時は `-p 5433` を付ける。
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fuju_bank_backend"]
       interval: 5s
@@ -18,15 +21,25 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     environment:
       DB_HOST: db
       DB_USERNAME: fuju_bank_backend
       DB_PASSWORD: password
       RAILS_ENV: development
+      # AuthCore (`fuju-system-authentication`) が発行する access_token (RS256) を
+      # ローカルで検証するための公開鍵 PEM。上の volumes で bind-mount したファイルを参照する。
+      # 秘密鍵は AuthCore リポジトリ側にだけ置く（bank には絶対に渡さない）。
+      AUTHCORE_JWT_PUBLIC_KEY_FILE: /run/secrets/authcore_jwt_public_key
     volumes:
       - .:/app
       - bundle_cache:/usr/local/bundle
+      # AuthCore (`fuju-system-authentication`) の公開鍵を read-only で bind-mount する。
+      # `proj-fuju/bank/` と `proj-fuju/fuju-system-authentication/` が兄弟ディレクトリで
+      # チェックアウトされていることを前提とする (README のセットアップ手順参照)。
+      # AuthCore 側で `scripts/gen-keys.sh` が走って鍵が再生成された場合、本コンテナの
+      # 再起動 (`docker compose up -d web`) だけで追従できる。
+      - ../../fuju-system-authentication/keys/jwt.public.pem:/run/secrets/authcore_jwt_public_key:ro
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
