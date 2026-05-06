@@ -100,6 +100,7 @@ RSpec.describe "ErrorHandling", type: :request do
         "error" => {
           "code" => "INTERNAL_ERROR",
           "message" => "内部エラーが発生しました",
+          "debug" => { "class" => "StandardError" },
         },
       )
       expect(Rails.logger).to have_received(:error).with(a_string_including("boom"))
