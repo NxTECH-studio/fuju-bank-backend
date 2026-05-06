@@ -89,6 +89,9 @@ class E2ESmoke
     beta = register_and_login(role: "beta")
 
     upsert_me(alpha, expected_status: 201)
+    # 同一 external_user_id での再 POST は 200 を返す（B2: lazy provisioning の半分は
+    # 「2 回目以降が 500 にならず 200 を返す」点なので、smoke で必ず両経路を踏む）。
+    upsert_me(alpha, expected_status: 200)
     upsert_me(beta, expected_status: 201)
     show_me(alpha)
 
@@ -166,19 +169,48 @@ class E2ESmoke
   # recipient の WS で UserChannel を購読した状態で actor から mint を発火し、
   # 5 秒以内に credit broadcast が届くことを確認する。WS は ensure で必ず閉じる。
   def receive_broadcast_during_mint(actor:, recipient:)
+    mint_amount = 1
     client = ActionCableClient.new(uri: @config.bank_cable_uri, access_token: recipient.access_token)
     client.connect(timeout: WS_HANDSHAKE_TIMEOUT_SECONDS)
     client.subscribe(USER_CHANNEL_IDENTIFIER, timeout: WS_HANDSHAKE_TIMEOUT_SECONDS)
     log("ws-#{recipient.label}", "subscribed UserChannel")
 
-    payload = client.wait_for_message(timeout: WS_BROADCAST_TIMEOUT_SECONDS) do
-      mint(actor: actor, recipient: recipient, amount: 1)
+    payload = wait_for_credit(client: client, recipient: recipient, mint_amount: mint_amount) do
+      mint(actor: actor, recipient: recipient, amount: mint_amount)
     end
-    raise CheckFailed.new("broadcast missing transaction_id: #{payload.inspect}") if payload["transaction_id"].nil?
+    assert_credit_payload!(payload, recipient: recipient, expected_amount: mint_amount)
 
     log("broadcast", "ok type=#{payload['type']} amount=#{payload['amount']} tx=#{payload['transaction_id']}")
   ensure
     client&.close
+  end
+
+  # mint 自体は 200 を返した（mint は raise on non-200）後に WS 配信が来ない場合のため、
+  # WSError を CheckFailed に rewrap して「mint は通った / WS 配信レイヤだけ壊れている」と
+  # 朝の調査で切り分けやすくする。
+  def wait_for_credit(client:, recipient:, mint_amount:, &)
+    client.wait_for_message(timeout: WS_BROADCAST_TIMEOUT_SECONDS, &)
+  rescue ActionCableClient::WSError => e
+    raise CheckFailed.new(
+      "#{e.message} (mint HTTP succeeded recipient=#{recipient.label} amount=#{mint_amount}; " \
+      "check ActionCable adapter / SolidCable)",
+    )
+  end
+
+  # broadcast の payload は `Ledger::Notifier#payload_for` が生成する Hash の JSON 化。
+  # 期待値は: type=credit / transaction_kind=mint / amount=mint_amount / transaction_id 非空。
+  def assert_credit_payload!(payload, recipient:, expected_amount:)
+    expected = {
+      "type" => "credit",
+      "transaction_kind" => "mint",
+      "amount" => expected_amount,
+    }
+    expected.each do |key, value|
+      next if payload[key] == value
+
+      raise CheckFailed.new("broadcast #{key} mismatch: got=#{payload[key].inspect} expected=#{value.inspect} (recipient=#{recipient.label})")
+    end
+    raise CheckFailed.new("broadcast missing transaction_id: #{payload.inspect}") if payload["transaction_id"].to_s.empty?
   end
 
   def mint(actor:, recipient:, amount:)
@@ -273,7 +305,10 @@ class E2ESmoke
   def expect_status!(stage, status, body, expected:)
     return if status == expected
 
-    raise CheckFailed.new("#{stage} failed: status=#{status} expected=#{expected} body=#{body}")
+    # body は AuthCore login 失敗時に access_token / pre_token 等を含みうるため、
+    # GH Actions ログへの漏出を抑える目的で先頭のみに切り詰める。
+    excerpt = body.to_s[0, 200]
+    raise CheckFailed.new("#{stage} failed: status=#{status} expected=#{expected} body=#{excerpt}")
   end
 
   def parse_json!(body, stage)
@@ -283,10 +318,12 @@ class E2ESmoke
   end
 
   # JWT から sub を取り出す（署名検証はサーバー側で済んでいるので payload 部のみ復号）。
+  # エラー時に `payload` 全体を出すと PII / 機密クレームが GH Actions ログに乗りうるため、
+  # claim 名のリストのみを露出させる。
   def decode_jwt_sub!(token)
     payload, _header = JWT.decode(token, nil, false)
     sub = payload["sub"]
-    raise CheckFailed.new("JWT missing sub claim: #{payload.inspect}") if sub.to_s.empty?
+    raise CheckFailed.new("JWT missing sub claim: claims=#{payload.keys.inspect}") if sub.to_s.empty?
 
     sub
   rescue JWT::DecodeError => e
@@ -334,13 +371,14 @@ class ActionCableClient # rubocop:disable Style/OneClassPerFile
     )
     register_callbacks
     @driver.start
-    pump_until(timeout: timeout) { @open || @closed || @driver_error }
-    raise WSError.new("WS handshake failed: #{@driver_error || 'closed before open'}") unless @open
+    pump_until(timeout: timeout) { @open || @closed || @driver_error || disconnected? }
+    raise WSError.new("WS handshake failed: #{handshake_failure_summary}") unless @open
   end
 
   def subscribe(identifier, timeout:)
     send_command("subscribe", identifier)
-    pump_until(timeout: timeout) { subscription_confirmed?(identifier) }
+    pump_until(timeout: timeout) { subscription_confirmed?(identifier) || disconnected? }
+    raise WSError.new("WS disconnected during subscribe: reason=#{disconnect_reason}") if disconnected?
     raise WSError.new("subscription not confirmed within #{timeout}s") unless subscription_confirmed?(identifier)
   end
 
@@ -361,8 +399,8 @@ class ActionCableClient # rubocop:disable Style/OneClassPerFile
 
     @driver&.close
     @socket&.close
-  rescue StandardError
-    # best-effort cleanup
+  rescue StandardError => e
+    warn "[ws-close] best-effort cleanup raised #{e.class}: #{e.message}"
   ensure
     @closed = true
   end
@@ -411,6 +449,25 @@ class ActionCableClient # rubocop:disable Style/OneClassPerFile
 
   def subscription_confirmed?(identifier)
     @messages.any? { |m| m["type"] == "confirm_subscription" && m["identifier"] == identifier }
+  end
+
+  # ActionCable は認証拒否や session 切断時に `{"type":"disconnect","reason":"..."}` を送る。
+  # 検出するとサブスク待ちのループを早期に抜けて、原因を含めたエラーを raise できる。
+  def disconnected?
+    @messages.any? { |m| m["type"] == "disconnect" }
+  end
+
+  def disconnect_reason
+    msg = @messages.find { |m| m["type"] == "disconnect" }
+    msg && msg["reason"]
+  end
+
+  def handshake_failure_summary
+    return "disconnect=#{disconnect_reason}" if disconnected?
+    return "driver_error=#{@driver_error}" if @driver_error
+    return "closed before open" if @closed
+
+    "timed out before handshake"
   end
 
   def broadcast_after(baseline)
