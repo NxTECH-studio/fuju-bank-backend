@@ -19,8 +19,8 @@
 #
 # 終了コード: 0=success / 1=failure
 
-require "base64"
 require "json"
+require "jwt"
 require "net/http"
 require "openssl"
 require "securerandom"
@@ -284,16 +284,12 @@ class E2ESmoke
 
   # JWT から sub を取り出す（署名検証はサーバー側で済んでいるので payload 部のみ復号）。
   def decode_jwt_sub!(token)
-    payload_b64 = token.split(".")[1]
-    raise CheckFailed.new("invalid JWT (no payload segment)") if payload_b64.nil?
-
-    padded = payload_b64 + ("=" * ((4 - (payload_b64.size % 4)) % 4))
-    parsed = JSON.parse(Base64.urlsafe_decode64(padded))
-    sub = parsed["sub"]
-    raise CheckFailed.new("JWT missing sub claim: #{parsed.inspect}") if sub.to_s.empty?
+    payload, _header = JWT.decode(token, nil, false)
+    sub = payload["sub"]
+    raise CheckFailed.new("JWT missing sub claim: #{payload.inspect}") if sub.to_s.empty?
 
     sub
-  rescue JSON::ParserError, ArgumentError => e
+  rescue JWT::DecodeError => e
     raise CheckFailed.new("failed to decode JWT: #{e.class}: #{e.message}")
   end
 
@@ -313,6 +309,14 @@ class ActionCableClient # rubocop:disable Style/OneClassPerFile
   BEARER_SUBPROTOCOL = "bearer"
   READ_CHUNK_BYTES = 4096
 
+  # websocket-driver の client が要求する `url` / `write` を満たす最小アダプタ。
+  # ActionCableClient 本体に直接生やすと WS 利用者向けでない API が漏れるため分離する。
+  DriverAdapter = Struct.new(:url, :socket) do
+    def write(data) # rubocop:disable Rails/Delegate
+      socket.write(data)
+    end
+  end
+
   def initialize(uri:, access_token:)
     @uri = uri
     @access_token = access_token
@@ -322,19 +326,10 @@ class ActionCableClient # rubocop:disable Style/OneClassPerFile
     @driver_error = nil
   end
 
-  # websocket-driver は内部で `url` と `write` を呼ぶため、self を渡す。
-  def url
-    @uri.to_s
-  end
-
-  def write(data) # rubocop:disable Rails/Delegate
-    @socket.write(data)
-  end
-
   def connect(timeout:)
     @socket = build_socket
     @driver = WebSocket::Driver.client(
-      self,
+      DriverAdapter.new(@uri.to_s, @socket),
       protocols: [ACTIONCABLE_SUBPROTOCOL, BEARER_SUBPROTOCOL, @access_token],
     )
     register_callbacks
@@ -380,22 +375,29 @@ class ActionCableClient # rubocop:disable Style/OneClassPerFile
     tcp = TCPSocket.new(host, port)
     return tcp unless @uri.scheme == "wss"
 
+    wrap_ssl(tcp, host)
+  end
+
+  def wrap_ssl(tcp, host)
     ssl_context = OpenSSL::SSL::SSLContext.new
     ssl_context.set_params
     ssl = OpenSSL::SSL::SSLSocket.new(tcp, ssl_context)
     ssl.hostname = host
     ssl.connect
     ssl
+  rescue StandardError
+    tcp.close
+    raise
   end
 
   def register_callbacks
     @driver.on(:open) { @open = true }
     @driver.on(:close) { @closed = true }
     @driver.on(:error) { |e| @driver_error = e.message }
-    @driver.on(:message) { |event| ingest_frame(event.data) }
+    @driver.on(:message) { |event| ingest_message(event.data) }
   end
 
-  def ingest_frame(data)
+  def ingest_message(data)
     return if data.to_s.empty?
 
     @messages << JSON.parse(data)
@@ -416,7 +418,6 @@ class ActionCableClient # rubocop:disable Style/OneClassPerFile
   end
 
   # 条件成立 or タイムアウトまで socket を読みつつ driver にフレームを流し込む。
-  # 戻り値の意味は呼び元で重要にしないよう、条件成立は呼び元で再評価して判定する。
   def pump_until(timeout:)
     deadline = monotonic_now + timeout
     until yield
