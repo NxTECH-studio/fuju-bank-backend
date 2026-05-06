@@ -4,4 +4,4 @@
 # 各 seed は `find_or_create_by!` 等で idempotent に書くこと
 # （CD で deploy 毎に走る想定）。
 
-Dir[Rails.root.join("db/seeds/*.rb")].sort.each { |path| load path }
+Rails.root.glob("db/seeds/*.rb").each { |path| load path }
