@@ -1,0 +1,38 @@
+name: E2E Smoke (nightly)
+
+# AuthCore → bank → UserChannel broadcast までを 1 コマンドで通す e2e_smoke.rb を
+# nightly に走らせ、本番ドメイン経路の死活を継続監視する。
+# 失敗通知は GH Actions 標準の失敗マーキングのみ。
+
+on:
+  schedule:
+    # 21:00 UTC = 06:00 JST（毎日 1 回）
+    - cron: "0 21 * * *"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AUTHCORE_BASE_URL: ${{ vars.AUTHCORE_BASE_URL }}
+      BANK_BASE_URL: ${{ vars.BANK_BASE_URL }}
+      BANK_CABLE_URL: ${{ vars.BANK_CABLE_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Verify required env
+        run: |
+          set -e
+          for v in AUTHCORE_BASE_URL BANK_BASE_URL BANK_CABLE_URL; do
+            if [ -z "${!v}" ]; then echo "missing required env: $v" >&2; exit 1; fi
+          done
+
+      - name: Run e2e smoke
+        run: bundle exec ruby script/e2e_smoke.rb
