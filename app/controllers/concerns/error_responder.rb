@@ -32,6 +32,12 @@ module ErrorResponder
 
   def render_internal_error(exception)
     Rails.logger.error(exception.full_message)
-    render_error(code: "INTERNAL_ERROR", message: "内部エラーが発生しました", status: :internal_server_error)
+    # ハッカソン期間中は本番ログに直接アクセスできないため、レスポンスに例外クラス名のみ
+    # 載せて E2E smoke / 手動疎通から原因のあたりが付くようにしている。message / backtrace
+    # は載せず PII / 内部パス露出は避ける。デモ後に削除すること。
+    render(
+      json: { error: { code: "INTERNAL_ERROR", message: "内部エラーが発生しました", debug: { class: exception.class.name } } },
+      status: :internal_server_error,
+    )
   end
 end
