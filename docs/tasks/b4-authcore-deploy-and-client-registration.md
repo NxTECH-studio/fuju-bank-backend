@@ -41,7 +41,7 @@ AuthCore は `/Users/ryota/Documents/works/proj-fuju/fuju-system-authentication`
 
 3. **bank の client 登録**:
    - AuthCore の `clients` テーブルへの seed CLI を確認。無ければ `cmd/seed_client/main.go` (or Rails-side `bin/rails authcore:seed_client`) を追加。
-   - `client_id=fuju-bank-backend` で row を作り、`client_secret` を strong random 生成 → Argon2id ハッシュで保存。発行した平文 secret は **1 回だけ表示**して本番 secret manager（GitHub Secrets / Kamal secrets）に投入。
+   - `client_id=fuju-bank-backend` で row を作り、`client_secret` を strong random 生成 → Argon2id ハッシュで保存。発行した平文 secret は **1 回だけ表示**して本番 secret manager（GitHub Secrets）に投入。
    - 平文を Slack / コミットに残さない。
 
 4. **疎通スクリプト** (`fuju-bank-backend/script/check_authcore.rb`):
