@@ -145,15 +145,15 @@ B5 (CD への ENV 注入 等)  ──┘
 #### B5. 既存 CD への AuthCore ENV 注入 / Solid Queue worker 追加 / ドキュメント更新
 
 - **前提（実態）**:
-  - 本番は **Kamal ではなく** `.github/workflows/cd.yml` が `main` push で Tailscale + SSH 経由で Proxmox CT に入り、`docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build` → ridgepole apply、で動いている。
+  - 本番は **旧デプロイ機構ではなく** `.github/workflows/cd.yml` が `main` push で Tailscale + SSH 経由で Proxmox CT に入り、`docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build` → ridgepole apply、で動いている。
   - `compose.prod.yml` には `db` (postgres:17) と `web` (Rails) のみ。`127.0.0.1:3000` にバインドしているので、ホスト側 reverse proxy が `api.fujupay.app` の TLS 終端をしている。
-  - `CLAUDE.md` の「デプロイ: Kamal」記述は古いので、本タスクで実態に揃える。
+  - `CLAUDE.md` の旧デプロイ記述は古いので、本タスクで実態に揃える。
 - **Why**: B1 / B2 で AuthCore JWT 検証 / introspection が走るようになると、`AUTHCORE_JWT_PUBLIC_KEY` / `AUTHCORE_BASE_URL` / `AUTHCORE_CLIENT_ID` / `AUTHCORE_CLIENT_SECRET` / `AUTHCORE_EXPECTED_AUDIENCE` / `AUTHCORE_EXPECTED_ISSUER` が production で未設定なら起動時に `KeyError` で落ちる。Solid Queue worker も現状 compose.prod.yml に独立サービスとして無いので、ジョブが消化されない可能性がある。
 - **対象ファイル / 成果物**:
   - `.github/workflows/cd.yml`（`env:` と `appleboy/ssh-action` の `envs:` に AUTHCORE_* を追加）
   - `compose.prod.yml`（web service の `environment:` に AUTHCORE_* を追加。必要なら `worker` サービスを追加）
   - GitHub Repository Settings → Secrets / Variables（`AUTHCORE_JWT_PUBLIC_KEY` / `AUTHCORE_CLIENT_SECRET` を Secret、それ以外を Variable）
-  - `CLAUDE.md`（「デプロイ: Kamal」を「GitHub Actions cd.yml + docker compose on Proxmox CT (Tailscale + SSH)」に書き換え）
+  - `CLAUDE.md`（旧デプロイ記述を「GitHub Actions cd.yml + docker compose on Proxmox CT (Tailscale + SSH)」に書き換え）
   - `docs/runbooks/deploy.md`（新規・現状 CD の手順 / ロールバック / secrets ローテーション手順）
 - **実装ポイント**:
   - Solid Queue は現状 `web` プロセスと同居か別 service かを `config/queue.yml` / Procfile から確認。別 service にする場合 `compose.prod.yml` に `worker:` を追加し `bundle exec rake solid_queue:start` を回す。
