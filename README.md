@@ -284,8 +284,9 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 
 ## テスト / Lint / セキュリティ
 
-- **RSpec + FactoryBot**: `database_rewinder` で各テスト後にクリーン、`bullet` で N+1 検出、
-  `test-prof` でプロファイリング、SimpleCov は CI のみ有効。
+- **RSpec + FactoryBot**: `database_rewinder` で各テスト後にクリーン、`TimeHelpers` で
+  `travel_to` / `freeze_time` 等が使える。`bullet` / `simplecov` / `test-prof` は
+  Gemfile に同梱しているが現状は未設定（必要時に各自セットアップ）。
 - **`let!` を常用**: プロジェクトのカスタム cop `RSpec/PreferLetBang` が有効で、
   スカラー値や遅延評価目的でも `let!` で統一します（詳細は `CLAUDE.md`）。
 - **RuboCop**: ダブルクォート / `key: value` ハッシュ / 末尾カンマ / コンパクトモジュール定義 /

@@ -151,10 +151,9 @@ Proxmox CT に入り、`docker compose -p fuju-bank-prod -f compose.prod.yml up 
 
 - RSpec + FactoryBot（`create`, `build` 等はメソッドとして直接利用可能）。
 - `database_rewinder` で DB クリーンアップ。
-- `bullet` で N+1 検出。
-- `test-prof` でプロファイリング。
-- SimpleCov は CI で有効（`CI=true` または `COVERAGE=true`）。
 - `TimeHelpers` 組み込み済み — `travel_to`, `freeze_time` 等が使える。
+- `bullet` / `simplecov` / `test-prof` は Gemfile に同梱しているが現状は未設定。
+  必要時に各自セットアップする。
 
 ## docs/tasks の使い方
 
