@@ -303,7 +303,9 @@ bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
 
 ## 参照
 
-- `CLAUDE.md`: プロジェクトルール、Docker / Makefile / RuboCop 規約
+- [`CLAUDE.md`](./CLAUDE.md): Claude Code 向けの規約と実装ナビ（RuboCop / RSpec /
+  `app/` 配下のディレクトリ構成 / 不変条件）
+- [`docs/tasks/INDEX.md`](./docs/tasks/INDEX.md): 実装方針ドキュメントの一覧とステータス
 - NxTECH Workspace: 「プロダクト落とし所 v5: 3層アーキテクチャ」設計思想
 - [Ridgepole](https://github.com/ridgepole/ridgepole)
 - [Solid Queue / Solid Cache / Solid Cable](https://github.com/rails/solid_queue)
