@@ -2,104 +2,163 @@
 
 このファイルは Claude Code (claude.ai/code) がこのリポジトリで作業する際のガイドです。
 
-## プロジェクト概要
-
-fuju-bank-backend — fuju-bank（感情を担保とする中央銀行）のバックエンド実装。Rails 8.1 API専用アプリケーション (Ruby 4.0.2, PostgreSQL)。
-
-「ふじゅ〜」という仮想通貨の発行・記帳・決済・配信を司る。マイニング層・参照 UI 層から
-呼び出される、3層アーキテクチャの **1層目（銀行層）**。
-
-設計思想の系譜は NxTECH Workspace の「プロダクト落とし所 v5: 3層アーキテクチャ」を参照。
+> **先に [README.md](./README.md) を読むこと。** プロジェクト概要 / 3 層アーキテクチャ /
+> ドメイン / 記帳モデル / API / 認証 / セットアップ / Makefile 一覧 / デプロイは
+> README.md が一次ソース。本ファイルは Claude Code 向けの規約と実装ナビに集中する。
 
 ## よく使うコマンド
 
-開発環境は Docker（`compose.yml`）で構築。Makefile 経由でコマンドを実行する。
+開発環境は Docker（`compose.yml`）で構築し、Makefile 経由で実行する。
+詳細な一覧は [README.md の「開発コマンド（Makefile）」](./README.md#開発コマンドmakefile) を参照。
+Claude が頻繁に使うのは以下:
 
 ```bash
-# Docker操作
-make setup                               # 初回セットアップ（ビルド→起動→DB作成→スキーマ適用）
-make up                                  # コンテナ起動
-make down                                # コンテナ停止
-
-# テスト
-make rspec                               # 全テスト実行
-make rspec ARGS=spec/models/             # ディレクトリ単位で実行
-make rspec ARGS=spec/models/user_spec.rb # ファイル単位で実行
-make rspec ARGS=spec/models/user_spec.rb:42  # 行番号指定で実行
-
-# Lint
-make rubocop                             # 全チェック
-make rubocop/fix                         # 安全な自動修正
-make rubocop/fix-all                     # 全自動修正（unsafe含む）
-
-# セキュリティ
-make brakeman                            # 静的解析
-make bundler-audit                       # Gem脆弱性スキャン
-
-# データベース
-make db/create                           # DB作成
-make db/schema/apply                     # Ridgepoleスキーマ適用（dev + test）
-make db/reset                            # DBドロップ→再作成→スキーマ適用
-
-# その他
-make console                             # Railsコンソール
-make sh                                  # コンテナ内シェル
-make logs                                # ログ表示
-make help                                # コマンド一覧
-```
-
-### Docker を使わない場合（ローカル直接実行）
-
-```bash
-bin/rails server
-bundle exec rspec
-bundle exec rubocop
-bundle exec rubocop -A
-bin/brakeman --no-pager
-bin/bundler-audit
-bin/rails db:create
-bundle exec ridgepole -c config/database.yml -E development --apply -f db/Schemafile
-bundle exec ridgepole -c config/database.yml -E test --apply -f db/Schemafile
+make rspec                                   # 全テスト実行
+make rspec ARGS=spec/models/                 # ディレクトリ単位
+make rspec ARGS=spec/models/user_spec.rb     # ファイル単位
+make rspec ARGS=spec/models/user_spec.rb:42  # 行番号指定
+make rubocop                                 # 全 lint
+make rubocop/fix                             # 安全な自動修正
+make db/schema/apply                         # Ridgepole スキーマ適用（dev + test）
 ```
 
 ## ブランチ戦略
 
-- **デフォルトブランチ**: `develop`（開発用）。PRのベースブランチは基本的に `develop` を指定する。
-- **本番ブランチ**: `main`（ブランチ保護あり、直接push禁止）。リリース時に `develop → main` へのPRをマージする。
-- **featureブランチ**: `feat/xxx` などのブランチを `develop` から切って作業し、`develop` へPRを出す。
-- **リリースPR自動生成**: `develop` へのpush時に GitHub Actions で `develop → main` へのリリースPRが自動生成・更新される。
+詳細は [README.md の「デプロイ」](./README.md#デプロイ) 参照。
+Claude は `develop` から `feat/xxx` を切って `develop` へ PR を出す。
+`main` への直接 push は禁止（リリース PR は GitHub Actions が自動生成）。
 
 ## アーキテクチャ
 
-- **API専用**: ビュー/アセットなし。`config.api_only = true`。他の2層（マイニング、SNS）から呼び出される中央銀行。
-- **スキーマ管理**: Railsマイグレーションではなく [Ridgepole](https://github.com/ridgepole/ridgepole) を使用。テーブル定義は `db/Schemafile` に記述（またはサブファイルをrequire）。
-- **バックグラウンドジョブ**: Solid Queue（DBベースのActive Jobアダプタ）。
-- **キャッシュ**: Solid Cache（DBベースのRails.cacheアダプタ）。
-- **リアルタイム配信**: Solid Cable / ActionCable。`UserChannel` を通じてユーザー HUD へ ledger イベントを push。
-- **開発環境**: Docker Compose（`compose.yml` + `Dockerfile`）。Makefile でコマンドをラップ。
-- **デプロイ**: GitHub Actions (`.github/workflows/cd.yml`) が `main` push 時に Tailscale + SSH で Proxmox CT に入り、`docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build` を実行。本番イメージは `Dockerfile.prod`。`.kamal/` は旧スキームの残骸（参照されていない）。
-- **DB接続**: 環境変数 `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` で設定。Docker環境では `compose.yml` で自動設定。
-- **CORS**: ネイティブクライアントのみ運用のため CORS 設定不要。`config/initializers/cors.rb` は無効化済みで、`rack-cors` Gem も導入していない。ブラウザクライアントから叩く要件が出た場合は許可オリジンを明示して `rack-cors` を再導入する（再導入時の方針は `docs/tasks/b3-cors-policy.md` の選択肢 (b) を参照）。
+### 全体像
+
+README の [3 層アーキテクチャでの位置づけ](./README.md#3-層アーキテクチャでの位置づけ) /
+[主要ドメイン](./README.md#主要ドメイン) / [記帳モデル](./README.md#記帳モデル複式簿記) を参照。
+本リポジトリは **API 専用**（`config.api_only = true`、ビュー / アセットなし）。
+
+### ディレクトリ構成（実装時のナビ）
+
+#### app/controllers/
+
+- `application_controller.rb` — ベース。`JwtAuthenticatable` を全 action に適用。
+  `current_external_user_id` / `current_user` ヘルパを供給。
+- `concerns/jwt_authenticatable.rb` — `Authorization: Bearer` の RS256 ローカル検証。
+  `service_actor_allowed!` を宣言したコントローラは `type=service` も受理し、
+  `current_actor_type` で actor 種別を区別できる。
+- `concerns/introspection_required.rb` — AuthCore `/v1/auth/introspect` を毎回叩く。
+  金銭移動系（`LedgerController`）のみ include。
+- `concerns/mfa_required.rb` — `introspection_result.mfa_verified?` を要求。未適用箇所あり。
+- `concerns/idempotent.rb` — `Idempotency-Key` ヘッダの取り回し。
+- `concerns/error_responder.rb` — 統一エラーレスポンス（`error.code` / `error.message`）。
+- `users_controller.rb` / `user_transactions_controller.rb` / `artifacts_controller.rb` /
+  `ledger_controller.rb` — リソース別エンドポイント。
+
+#### app/models/
+
+- `user.rb` — `external_user_id`（AuthCore の `sub`、ULID 26 文字）で同定。
+  `after_create` で `Account(kind: "user")` を 1:1 で生成。
+- `artifact.rb` — `location_kind` enum (`physical` / `url`)。
+- `account.rb` — `kind` enum で `system_issuance` / `user` / `store` を区別。
+  `balance_fuju` は `ledger_entries.amount` の SUM キャッシュ。
+- `ledger_transaction.rb` — `kind` (`mint` / `transfer`) / `idempotency_key` (unique) /
+  `metadata` JSONB。`SUM(entries.amount) = 0` を validation で保証。
+- `ledger_entry.rb` — 複式簿記の片側。1 トランザクションに必ず 2 行以上。
+- `store.rb` — QR 決済基盤（MPM）用の店舗エンティティ
+  （`docs/tasks/qr-payment-foundation-mpm/` 参照）。
+
+#### app/services/
+
+- `ledger/mint.rb` — Artifact → User の発行サービス。
+  `ActiveRecord::Base.transaction` で原子性を担保し、成功時に `Ledger::Notifier` を呼ぶ。
+- `ledger/transfer.rb` — User → User の送金サービス。残高不足は `INSUFFICIENT_BALANCE`。
+- `ledger/notifier.rb` — `UserChannel` への broadcast を担当。
+- `user_provisioner.rb` — JWT 検証成功時に `sub` から User + Account を lazy 作成。
+  `ActiveRecord::RecordNotUnique` を rescue して並行リクエストを吸収。
+- `authcore/jwt_verifier.rb` — RS256 / `aud` / `iss` / `exp` / `type` を検証する責務。
+  Connection / Controller 双方から使う。
+- `authcore/introspection_client.rb` — AuthCore `/v1/auth/introspect` のクライアント。
+  RFC 7662 準拠（Basic Auth + form）。
+- `authcore/introspection_result.rb` — introspection レスポンスの値オブジェクト
+  (`active?` / `mfa_verified?` / `scope` 等)。
+
+#### app/channels/
+
+- `application_cable/connection.rb` — JWT 認証を Connection レイヤで実施
+  （subprotocol `Sec-WebSocket-Protocol: bearer, <jwt>`）。
+- `application_cable/channel.rb` — ベース。
+- `user_channel.rb` — 受け手 User へ `credit` イベントを broadcast。
+  `current_user` に対して `stream_for` する形が安全。
+
+#### app/jobs/
+
+現状は `application_job.rb` のみ。Solid Queue で `bin/jobs` または compose の `worker`
+が消化する想定（必要に応じて追加）。
+
+### 主要な不変条件（実装時に壊さない）
+
+| 制約 | 実装場所 |
+|---|---|
+| `SUM(ledger_entries.amount) = 0` per transaction | `LedgerTransaction` の validation |
+| `accounts.balance_fuju >= 0 WHERE kind = 'user'` | DB の CHECK 制約（部分制約） |
+| `ledger_transactions.idempotency_key` unique | DB のユニーク制約 |
+| mint / transfer 処理の原子性 | `ActiveRecord::Base.transaction` で囲む |
+| 受取人の cross-service 同定 | `users.external_user_id` (= AuthCore の `sub`) で行う |
+
+### スキーマ管理
+
+Rails マイグレーションではなく [Ridgepole](https://github.com/ridgepole/ridgepole) を使用。
+テーブル定義は `db/Schemafile` に直書き or サブファイル require。
+**Claude が新規タスクで「migration を作る」ことを提案してはいけない**。
+`db/Schemafile` を編集し、`make db/schema/apply` で dev / test に適用する。
+
+### バックグラウンド / Cache / Cable
+
+- Solid Queue（Active Job アダプタ）/ Solid Cache（`Rails.cache` アダプタ）/
+  Solid Cable（ActionCable アダプタ）。すべて DB ベースで Redis 不要。
+- production の Cable adapter / `allowed_request_origins` / hosts は
+  `docs/tasks/prod-action-cable-solid-adapter-and-origins.md` に経緯あり。
+
+### CORS
+
+ネイティブクライアントのみ運用のため CORS 設定不要。
+`config/initializers/cors.rb` は無効化済みで、`rack-cors` Gem も導入していない。
+ブラウザクライアントから叩く要件が出たら `docs/tasks/b3-cors-policy.md` の
+選択肢 (b) に従って `rack-cors` を再導入する。
+
+### デプロイ
+
+GitHub Actions (`.github/workflows/cd.yml`) が `main` push 時に Tailscale + SSH で
+Proxmox CT に入り、`docker compose -p fuju-bank-prod -f compose.prod.yml up -d --build`
+を実行。本番イメージは `Dockerfile.prod`。詳細は
+[README.md の「デプロイ」](./README.md#デプロイ) 参照。
 
 ## コードスタイル (RuboCop)
 
 デフォルトと異なる主要ルール:
 
 - **文字列**: ダブルクォート（`"hello"`）。例外: Gemfile。
-- **Hashショートハンド**: 禁止 — 常に `key: value` を使い、`key:` 省略記法は使わない（`Style/HashSyntax: never`）。
+- **Hash ショートハンド**: 禁止 — 常に `key: value` を使い、`key:` 省略記法は使わない
+  （`Style/HashSyntax: never`）。
 - **末尾カンマ**: 複数行の引数・配列・ハッシュでは必須。
 - **モジュールスタイル**: コンパクト形式（`class Foo::Bar`、ネストしない）。
-- **行の長さ**: 最大160文字（specファイルは制限なし）。
-- **Lambda記法**: リテラル（`-> { }`、`lambda { }` は使わない）。
-- **`let` vs `let!`（RSpec）**: カスタムcop `RSpec/PreferLetBang` が有効 — `let!` を優先。
+- **行の長さ**: 最大 160 文字（spec ファイルは制限なし）。
+- **Lambda 記法**: リテラル（`-> { }`、`lambda { }` は使わない）。
+- **`let` vs `let!`（RSpec）**: カスタム cop `RSpec/PreferLetBang` が有効 — `let!` を優先。
 - **ドキュメント**: モデル・ジョブ・サービスにはクラスコメント必須（基底クラスは除く）。
 - **述語メソッドの接頭辞**: `is_` は禁止（`is_active?` ではなく `active?`）。
 
 ## テスト
 
 - RSpec + FactoryBot（`create`, `build` 等はメソッドとして直接利用可能）。
-- `database_rewinder` でDBクリーンアップ。
-- `bullet` でN+1検出。
+- `database_rewinder` で DB クリーンアップ。
+- `bullet` で N+1 検出。
 - `test-prof` でプロファイリング。
-- SimpleCovはCIで有効（`CI=true` または `COVERAGE=true`）。
+- SimpleCov は CI で有効（`CI=true` または `COVERAGE=true`）。
 - `TimeHelpers` 組み込み済み — `travel_to`, `freeze_time` 等が使える。
+
+## docs/tasks の使い方
+
+`docs/tasks/` 配下に実装方針ドキュメントを置き、`/start-with-plan {ファイル名}` で
+実装に取り掛かれる粒度で管理する。タスクの一覧とステータスは
+[`docs/tasks/INDEX.md`](./docs/tasks/INDEX.md) で一元管理する
+（タスクファイル本体にはステータスを書き込まない）。
