@@ -14,7 +14,7 @@ bank backend は既に `https://api.fujupay.app` で稼働中。CD は `.github/
 1. cd.yml と compose.prod.yml に AUTHCORE_* ENV を注入
 2. Solid Queue worker サービスを compose に追加（無ければ）
 3. Solid Cable のテーブル作成手順を runbook 化
-4. CLAUDE.md の「Kamal でデプロイ」記述を実態に修正
+4. CLAUDE.md の旧デプロイ記述を実態に修正
 
 ## 背景・目的
 
@@ -100,8 +100,8 @@ bank backend は既に `https://api.fujupay.app` で稼働中。CD は `.github/
 4. **runbook 作成** (`docs/runbooks/deploy.md`): **ハッカソンでは省略可**。本番運用に切り替えるタイミングで書く
 
 5. **CLAUDE.md 更新**:
-   - 「デプロイ: Kamal」を「GitHub Actions cd.yml + docker compose on Proxmox CT (Tailscale + SSH)」に書き換え
-   - `.kamal/` ディレクトリの扱いは判断保留（無害なら残す）
+   - 「デプロイ: 旧スキーム」を「GitHub Actions cd.yml + docker compose on Proxmox CT (Tailscale + SSH)」に書き換え
+   - 旧デプロイ残骸ディレクトリの扱いは判断保留（無害なら残す）
 
 ## 検証チェックリスト
 
@@ -148,11 +148,11 @@ bank backend は既に `https://api.fujupay.app` で稼働中。CD は `.github/
 - AuthCore 側に既に居る `OAuthTest` (`clientfortest` / `passwordfortest`) で疎通する
 - ⚠️ secret が辞書語なのでブルートフォース耐性なし。本番運用ではこの client を必ず捨てる
 
-### worker service / runbook / `.kamal/` の扱い
+### worker service / runbook / 旧デプロイ残骸の扱い
 
 - Solid Queue worker は現状 Gemfile には居るが、本番で worker プロセスが立っていない可能性が高い。ただし送金/mint で Active Job を使っていないなら今は不要 → ハッカソンでは判断保留
-- `docs/runbooks/deploy.md` 新規作成と CLAUDE.md の Kamal → cd.yml 書き換えはハッカソンでは省略可。CLAUDE.md は実態と乖離している部分だけ最低限直す
-- `.kamal/` ディレクトリが残っていても無害なので削除はしない
+- `docs/runbooks/deploy.md` 新規作成と CLAUDE.md の旧デプロイ → cd.yml 書き換えはハッカソンでは省略可。CLAUDE.md は実態と乖離している部分だけ最低限直す
+- 旧デプロイ残骸ディレクトリが残っていても無害なので削除はしない（後日 docs-overhaul で除去予定）
 
 ### develop と main のズレ
 
