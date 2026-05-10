@@ -112,8 +112,7 @@ Headers: Idempotency-Key, X-MFA-Ticket
     コントローラの全 action（または `before_action :require_mfa_verified!, only: [:xxx]`
     で部分適用）が MFA 必須となる。config 化はされていない。
 
-→ 確認結果: **bank-backend 側はインフラ（concern / introspection / エラーコード）を完備済み。
-追加の MFA 強制を transfer に当てるかは別タスク**（Open Question 4 とも絡む方針判断）。
+→ 詳細は本ドキュメント末尾の「bank-backend 側 確認結果サマリ」参照。
 
 ## API 仕様案（候補 A 採用時）
 
@@ -167,9 +166,10 @@ Response 429:
   - 既存 `mfa_verify` のサービスクラスを再利用 + 新 access_token 発行
   - request spec
 - **fuju-bank-backend**:
-  - 変更なし（仕様確認のみ）
-  - 既に `mfa_verified` を introspection で見ているなら 0 行変更
-  - 見ていないなら `before_action` を追加して MFA 必須 action を保護
+  - 変更なし（コード変更 0 行）。`Authcore::IntrospectionResult#mfa_verified?` と `MfaRequired`
+    concern が既に揃っており、必要になった時点で `LedgerController` に 1 行
+    （`include MfaRequired` または `before_action :require_mfa_verified!, only: [:transfer]`）
+    を追加するのみ。
 - **fuju-bank-app（クライアント）**:
   - `AuthApi.mfaStepUp(code, recoveryCode)` 追加
   - `LedgerRepository.transfer` の `MfaRequired` ハンドリング経路に組み込み
