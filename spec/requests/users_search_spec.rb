@@ -27,8 +27,8 @@ RSpec.describe "GET /users/search", type: :request do
     it "部分一致でヒットする（リス → アリス）" do
       get("/users/search", params: { q: "リス" })
 
-      ids = response.parsed_body["users"].map { |u| u["id"] }
-      expect(ids).to match_array([alice1.id, alice2.id])
+      ids = response.parsed_body["users"].pluck("id")
+      expect(ids).to contain_exactly(alice1.id, alice2.id)
     end
 
     it "ヒット 0 件は 200 + 空配列を返す（404 ではない）" do
@@ -41,7 +41,7 @@ RSpec.describe "GET /users/search", type: :request do
     it "自分自身は API 側で除外される（自分の name でも検索結果に含まれない）" do
       get("/users/search", params: { q: caller_user.name })
 
-      ids = response.parsed_body["users"].map { |u| u["id"] }
+      ids = response.parsed_body["users"].pluck("id")
       expect(ids).not_to include(caller_user.id)
     end
 
@@ -82,7 +82,7 @@ RSpec.describe "GET /users/search", type: :request do
     it "id 昇順で先頭から limit 件返す" do
       get("/users/search", params: { q: "サンプル", limit: 3 })
 
-      ids = response.parsed_body["users"].map { |u| u["id"] }
+      ids = response.parsed_body["users"].pluck("id")
       expect(ids).to eq(targets.first(3).map(&:id))
     end
   end
@@ -94,7 +94,7 @@ RSpec.describe "GET /users/search", type: :request do
     it "% を含むクエリは literal として扱う（全件マッチにならない）" do
       get("/users/search", params: { q: "100%" })
 
-      ids = response.parsed_body["users"].map { |u| u["id"] }
+      ids = response.parsed_body["users"].pluck("id")
       expect(ids).to contain_exactly(percent.id)
     end
   end

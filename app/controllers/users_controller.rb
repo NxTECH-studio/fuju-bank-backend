@@ -72,7 +72,6 @@ class UsersController < ApplicationController
     raise ValidationFailedError.new(message: "q must be at most #{SEARCH_QUERY_MAX_LENGTH} characters") if query.length > SEARCH_QUERY_MAX_LENGTH
   end
 
-  # limit は 1..SEARCH_MAX_LIMIT に強制。範囲外指定は 422 を返す。未指定はデフォルト。
   def parse_search_limit(raw)
     return SEARCH_DEFAULT_LIMIT if raw.blank?
 
