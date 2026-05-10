@@ -58,9 +58,26 @@ RSpec.describe UserProvisioner do
         expect(described_class.call(external_user_id: external_user_id)).to eq(existing_user)
       end
 
-      it "name / public_key / public_id を渡しても既存属性は更新されない（idempotent）" do
-        described_class.call(external_user_id: external_user_id, name: "Updated", public_key: "pk_updated", public_id: "updated_pid")
-        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original", public_id: "original_pid")
+      it "public_id を渡せば既存値が上書きされる（AuthCore 側 public_id 変更を bank へ伝播）" do
+        described_class.call(external_user_id: external_user_id, public_id: "updated_pid")
+        expect(existing_user.reload.public_id).to eq("updated_pid")
+      end
+
+      it "public_id が nil の場合は既存値を維持する" do
+        described_class.call(external_user_id: external_user_id, public_id: nil)
+        expect(existing_user.reload.public_id).to eq("original_pid")
+      end
+
+      it "同じ public_id を渡しても updated_at が動かない（no-op）" do
+        travel_to(2.days.from_now) do
+          expect { described_class.call(external_user_id: external_user_id, public_id: "original_pid") }
+            .not_to(change { existing_user.reload.updated_at })
+        end
+      end
+
+      it "name / public_key を渡しても既存属性は更新されない（最小 C スコープ: public_id のみ更新）" do
+        described_class.call(external_user_id: external_user_id, name: "Updated", public_key: "pk_updated")
+        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original")
       end
 
       it "戻り値の previously_new_record? は false" do
