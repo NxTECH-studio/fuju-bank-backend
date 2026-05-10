@@ -2,14 +2,14 @@ require "rails_helper"
 
 RSpec.describe "GET /users/search", type: :request do
   let!(:default_sub) { "01HYZ0000000000000000000AA" }
-  let!(:caller_user) { create(:user, external_user_id: default_sub, name: "呼び出し元", public_id: "me_caller") }
+  let!(:caller_user) { create(:user, external_user_id: default_sub, public_id: "me_caller") }
 
   before { stub_active_introspection(sub: default_sub) }
 
   context "正常系" do
-    let!(:alice1) { create(:user, name: "アリス", public_id: "alice") }
-    let!(:alice2) { create(:user, name: "アリス2024", public_id: "alice2024") }
-    let!(:bob) { create(:user, name: "ボブ", public_id: "bob") }
+    let!(:alice1) { create(:user, public_id: "alice") }
+    let!(:alice2) { create(:user, public_id: "alice2024") }
+    let!(:bob) { create(:user, public_id: "bob") }
 
     it "200 と { users: [...] } を返し、各要素は id / public_id / icon_url のみ（name は含まれない）" do
       get("/users/search", params: { q: "ali" })
@@ -31,6 +31,13 @@ RSpec.describe "GET /users/search", type: :request do
       expect(ids).to contain_exactly(alice1.id, alice2.id)
     end
 
+    it "完全一致も前方一致仕様の中でヒットする（alice → alice / alice2024）" do
+      get("/users/search", params: { q: "alice" })
+
+      ids = response.parsed_body["users"].pluck("id")
+      expect(ids).to contain_exactly(alice1.id, alice2.id)
+    end
+
     it "大文字小文字無視（ALI → alice / alice2024）" do
       get("/users/search", params: { q: "ALI" })
 
@@ -44,8 +51,17 @@ RSpec.describe "GET /users/search", type: :request do
       expect(response.parsed_body["users"]).to eq([])
     end
 
+    it "ハイフンを含む public_id も前方一致でヒットする" do
+      hyphen = create(:user, public_id: "ali-ce")
+
+      get("/users/search", params: { q: "ali-" })
+
+      ids = response.parsed_body["users"].pluck("id")
+      expect(ids).to contain_exactly(hyphen.id)
+    end
+
     it "public_id が NULL のレコードはヒットしない" do
-      create(:user, name: "no public id", public_id: nil)
+      create(:user, public_id: nil)
 
       get("/users/search", params: { q: "ali" })
 
@@ -120,7 +136,31 @@ RSpec.describe "GET /users/search", type: :request do
 
       ids = response.parsed_body["users"].pluck("id")
       expect(ids).to contain_exactly(u_plain.id, u_test.id)
-      expect(ids).not_to include(ux_other.id)
+    end
+
+    # public_id 自体は PUBLIC_ID_REGEX で `%` を許可しないが、検索クエリ q では入りうる。
+    # サニタイズが外れると `q="a%"` で全 a* 列挙が可能になり enumeration 抑止が崩れるので守る。
+    it "% を含むクエリは literal として扱う（任意 0 文字以上のワイルドカードにならない）" do
+      get("/users/search", params: { q: "u%" })
+
+      expect(response.parsed_body["users"]).to eq([])
+    end
+  end
+
+  context "境界値（valid な長さ）" do
+    let!(:targets) { Array.new(2) { |i| create(:user, public_id: format("ab%02d", i)) } }
+
+    it "q が 2 文字ちょうどなら 200" do
+      get("/users/search", params: { q: "ab" })
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["users"].size).to eq(2)
+    end
+
+    it "q が 64 文字ちょうどなら 200（ヒット 0 件でもバリデーションは通る）" do
+      get("/users/search", params: { q: "a" * 64 })
+
+      expect(response).to have_http_status(:ok)
     end
   end
 

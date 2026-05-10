@@ -2,7 +2,7 @@
 # external_user_id は JWT の sub から取得し、クライアント params からは受け取らない。
 #
 # `search` のみ AuthCore の introspection で active=true を要求する
-# （表示名 enumeration 抑止のため）。それ以外の参照系
+# （public_id ハンドルの enumeration 抑止のため）。それ以外の参照系
 # （show / show_me / upsert_me）はローカル JWT 検証のみで通す既存挙動を維持する。
 class UsersController < ApplicationController
   include IntrospectionRequired
