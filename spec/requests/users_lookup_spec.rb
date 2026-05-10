@@ -41,11 +41,29 @@ RSpec.describe "GET /users/lookup", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body).to include("id" => caller_user.id, "public_id" => caller_user.public_id)
     end
+
+    # 既定の stub_active_introspection は mfa_verified=false を返す。
+    # lookup には MfaRequired を include していないことを保証する（後続改修で誤って足したときに気付くため）。
+    it "MFA 未済（mfa_verified=false）でも 200 を返す" do
+      get("/users/lookup", params: { public_id: "alice" })
+
+      expect(response).to have_http_status(:ok)
+    end
   end
 
   context "存在しない public_id" do
     it "404 NOT_FOUND を返す" do
       get("/users/lookup", params: { public_id: "ghost" })
+
+      expect(response).to have_http_status(:not_found)
+      expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")
+    end
+
+    # citext 化等で挙動が変わると送金先解決の意味が変質するため、case-sensitive を固定化する。
+    it "大文字小文字違い（Alice）は 404（case-sensitive）" do
+      create(:user, public_id: "alice")
+
+      get("/users/lookup", params: { public_id: "Alice" })
 
       expect(response).to have_http_status(:not_found)
       expect(response.parsed_body.dig("error", "code")).to eq("NOT_FOUND")

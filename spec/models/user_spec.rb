@@ -72,6 +72,16 @@ RSpec.describe User, type: :model do
         expect(user).to be_valid
       end
 
+      it "下限ちょうど 3 文字なら valid（境界 inclusive）" do
+        user = build(:user, public_id: "abc")
+        expect(user).to be_valid
+      end
+
+      it "上限ちょうど 32 文字なら valid（境界 inclusive）" do
+        user = build(:user, public_id: "a" * 32)
+        expect(user).to be_valid
+      end
+
       it "空文字は invalid" do
         user = build(:user, public_id: "")
         expect(user).not_to be_valid
@@ -88,6 +98,15 @@ RSpec.describe User, type: :model do
         user = build(:user, public_id: "a" * 33)
         expect(user).not_to be_valid
         expect(user.errors[:public_id]).to be_present
+      end
+
+      # `\A...\z` ではなく `^...$` 等への誤改修で改行を許容しないよう回帰防止
+      ["alice\n", " alice", "alice ", "al ice"].each do |bad|
+        it "空白・改行を含む #{bad.inspect} は invalid" do
+          user = build(:user, public_id: bad)
+          expect(user).not_to be_valid
+          expect(user.errors[:public_id]).to be_present
+        end
       end
 
       it "許可されない文字（マルチバイト）を含むと invalid" do
