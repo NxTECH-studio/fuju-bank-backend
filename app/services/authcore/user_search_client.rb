@@ -21,7 +21,12 @@ class Authcore::UserSearchClient
     raise AuthcoreUnavailableError unless response.is_a?(Net::HTTPSuccess)
 
     payload = JSON.parse(response.body)
-    Array(payload["users"])
+    users = payload["users"]
+    return [] unless users.is_a?(Array)
+
+    # id / public_id 欠落要素は AuthCore 仕様違反。クライアントに id: null が漏れて
+    # 送金導線が壊れるのを防ぐため、要素単位でも弾く。
+    users.select { |u| u.is_a?(Hash) && u["id"].present? && u["public_id"].present? }
   rescue Net::OpenTimeout, Net::ReadTimeout, SocketError, Errno::ECONNREFUSED
     raise AuthcoreUnavailableError
   rescue JSON::ParserError

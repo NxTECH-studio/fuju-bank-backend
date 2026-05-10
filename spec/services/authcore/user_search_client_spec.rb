@@ -95,6 +95,48 @@ RSpec.describe Authcore::UserSearchClient do
       end
     end
 
+    context "200 + users が配列でない場合（仕様違反レスポンス）" do
+      before do
+        stub_request(:get, endpoint_url).with(query: hash_including({})).to_return(
+          status: 200,
+          body: { "users" => "not-an-array" }.to_json,
+          headers: { "Content-Type" => "application/json" },
+        )
+      end
+
+      it "空配列として扱う" do
+        expect(described_class.call(query: "ali", limit: 10)).to eq([])
+      end
+    end
+
+    context "200 + 必須キー欠落要素を含む場合" do
+      let!(:payload) do
+        {
+          "users" => [
+            { "id" => "01HALICE000000000000000000", "public_id" => "alice", "icon_url" => nil },
+            { "id" => nil, "public_id" => "noid", "icon_url" => nil },
+            { "id" => "01HNOPUBLICID000000000000A", "icon_url" => nil },
+            "not-a-hash",
+          ],
+        }
+      end
+
+      before do
+        stub_request(:get, endpoint_url).with(query: hash_including({})).to_return(
+          status: 200,
+          body: payload.to_json,
+          headers: { "Content-Type" => "application/json" },
+        )
+      end
+
+      it "id / public_id 欠落要素を弾いて返す" do
+        result = described_class.call(query: "ali", limit: 10)
+
+        expect(result.size).to eq(1)
+        expect(result.first["public_id"]).to eq("alice")
+      end
+    end
+
     context "AuthCore 障害 / 異常レスポンスの場合" do
       let!(:base_stub) { stub_request(:get, endpoint_url).with(query: hash_including({})) }
 

@@ -27,8 +27,16 @@ class UserProvisioner
   private
 
   def sync_existing!(user)
-    user.update!(public_id: @public_id) if @public_id.present? && user.public_id != @public_id
+    return user unless @public_id.present? && user.public_id != @public_id
+
+    user.update!(public_id: @public_id)
     user
+  rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
+    # 別ユーザーが先に同じ public_id を取得済み（AuthCore 側でリネーム競合）。
+    # bank.users.public_id は当面キャッシュ扱い (users-search-cross-service-identity.md) なので
+    # 同期を諦め、bank の既存値のまま返す。次回同期 or AuthCore リネームで自然解消する想定。
+    # update! 失敗時に in-memory の attribute が dirty なまま残るので reload で巻き戻す。
+    user.reload
   end
 
   def create_user!

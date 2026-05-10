@@ -1,5 +1,5 @@
 module AuthcoreUserSearchStubs
-  USER_SEARCH_ENDPOINT = "https://auth.fuju.example/v1/users/search".freeze
+  USER_SEARCH_ENDPOINT = "#{ENV.fetch('AUTHCORE_BASE_URL')}#{Authcore::UserSearchClient::ENDPOINT_PATH}".freeze
 
   def stub_authcore_user_search(users:, query: nil, limit: nil)
     filter = {}

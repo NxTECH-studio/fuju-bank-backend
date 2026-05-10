@@ -86,6 +86,29 @@ RSpec.describe UserProvisioner do
       end
     end
 
+    context "既存ユーザーの public_id が NULL の場合（旧クライアントで作成された legacy レコード）" do
+      let!(:legacy_user) { create(:user, external_user_id: external_user_id, public_id: nil) }
+
+      it "AuthCore から渡された public_id で充填される（本タスクの主目的）" do
+        described_class.call(external_user_id: external_user_id, public_id: "alice")
+        expect(legacy_user.reload.public_id).to eq("alice")
+      end
+    end
+
+    context "public_id 衝突時の挙動" do
+      let!(:other_user) { create(:user, public_id: "taken") }
+      let!(:existing_user) { create(:user, external_user_id: external_user_id, public_id: "original_pid") }
+
+      # AuthCore でユーザー Y がリネームしたが bank 側に古い所有者 X が残っているケース。
+      # ここで raise すると Y の認証付き全 API が 5xx になるため、bank は同期を諦める。
+      it "他ユーザーが先に保有している public_id を渡されたら同期を諦め、既存値のまま返す" do
+        result = described_class.call(external_user_id: external_user_id, public_id: "taken")
+
+        expect(result.public_id).to eq("original_pid")
+        expect(existing_user.reload.public_id).to eq("original_pid")
+      end
+    end
+
     context "異常系" do
       it "不正な ULID は ActiveRecord::RecordInvalid を raise する" do
         expect { described_class.call(external_user_id: "not-a-ulid") }

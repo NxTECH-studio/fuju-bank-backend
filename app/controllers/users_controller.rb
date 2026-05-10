@@ -54,6 +54,7 @@ class UsersController < ApplicationController
     hits = Authcore::UserSearchClient.call(query: q, limit: limit)
     # AuthCore レスポンスの "id" は ULID で、bank の external_user_id (= JWT sub) と同値。
     # 自己除外を bank 側で後段フィルタとして実施する（AuthCore に caller を渡す経路を作らないため）。
+    # 自己ヒットが含まれた場合、結果は AuthCore に投げた limit より 1 件少なくなる仕様（穴あき許容）。
     filtered = hits.reject { |u| u["id"] == current_external_user_id }
 
     render(json: { users: filtered.map { |u| serialize_search_hit(u) } })
@@ -102,7 +103,8 @@ class UsersController < ApplicationController
     }
   end
 
-  # email / balance_fuju / public_key / created_at はプライバシー観点で返さない。
+  # AuthCore レスポンスのうち bank が公開する 3 フィールドのみホワイトリスト方式で通す。
+  # 余分なフィールドが将来追加されても bank から漏らさないようにするため。
   def serialize_search_hit(hit)
     {
       id: hit["id"],

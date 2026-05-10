@@ -1,5 +1,11 @@
 # users-search-by-public-id
 
+> **後続注記 (2026-05-10)**: 本タスクで実装した「`bank.users.public_id` を ILIKE で SQL 検索」する経路は、
+> `bank.users.public_id` が大半 NULL のため staging でほぼヒットせず、
+> [users-search-cross-service-identity.md](./users-search-cross-service-identity.md) で
+> 「AuthCore `/v1/users/search` への委譲」へ置換された。
+> このドキュメントは経緯保全のために残しているが、現行コードの仕様ではない。
+
 ## 概要
 
 `GET /users/search` の検索キーを `users.name` の ILIKE 部分一致から

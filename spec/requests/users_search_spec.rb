@@ -86,7 +86,7 @@ RSpec.describe "GET /users/search", type: :request do
     end
   end
 
-  context "境界値（valid な長さ）" do
+  context "境界値（valid な長さ・limit）" do
     before { stub_authcore_user_search(users: []) }
 
     it "q が 2 文字ちょうどなら 200" do
@@ -99,6 +99,25 @@ RSpec.describe "GET /users/search", type: :request do
       get("/users/search", params: { q: "a" * 32 })
 
       expect(response).to have_http_status(:ok)
+    end
+
+    it "limit が 1 なら 200" do
+      get("/users/search", params: { q: "ali", limit: 1 })
+
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "limit が 20 なら 200（上限ちょうど）" do
+      get("/users/search", params: { q: "ali", limit: 20 })
+
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "q の前後空白は strip され、strip 後の値で AuthCore を呼ぶ" do
+      get("/users/search", params: { q: "  ali  " })
+
+      expect(WebMock).to have_requested(:get, AuthcoreUserSearchStubs::USER_SEARCH_ENDPOINT)
+        .with(query: { q: "ali", limit: "10" })
     end
   end
 
