@@ -13,14 +13,23 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:created)
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id name public_key balance_fuju created_at])
+        expect(parsed.keys).to match_array(%w[id name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "name" => "Alice",
           "balance_fuju" => 0,
           "public_key" => nil,
+          "public_id" => nil,
         )
         expect(parsed["id"]).to be_present
         expect(parsed["created_at"]).to match(/\A\d{4}-\d{2}-\d{2}T/)
+      end
+
+      it "public_id を指定した場合は保存され、レスポンスにも反映される" do
+        post("/users/me", params: { name: "Alice", public_id: "alice" })
+
+        expect(response).to have_http_status(:created)
+        expect(response.parsed_body).to include("public_id" => "alice")
+        expect(User.last.public_id).to eq("alice")
       end
 
       it "external_user_id は JWT の sub から取られる（body 値は無視される）" do
@@ -62,7 +71,7 @@ RSpec.describe "Users", type: :request do
     end
 
     context "既存（idempotent）" do
-      let!(:existing_user) { create(:user, external_user_id: default_sub, name: "Original", public_key: "pk_original") }
+      let!(:existing_user) { create(:user, external_user_id: default_sub, name: "Original", public_key: "pk_original", public_id: "original_pid") }
 
       it "二度目以降は User を増やさず 200 を返す" do
         expect { post("/users/me", params: { name: "Updated" }) }
@@ -71,11 +80,11 @@ RSpec.describe "Users", type: :request do
         expect(response).to have_http_status(:ok)
       end
 
-      it "既存ユーザーの属性は body 値で上書きされない" do
-        post("/users/me", params: { name: "Updated", public_key: "pk_updated" })
+      it "既存ユーザーの属性は body 値で上書きされない（public_id 含む）" do
+        post("/users/me", params: { name: "Updated", public_key: "pk_updated", public_id: "updated_pid" })
 
-        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original")
-        expect(response.parsed_body).to include("name" => "Original", "public_key" => "pk_original")
+        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original", public_id: "original_pid")
+        expect(response.parsed_body).to include("name" => "Original", "public_key" => "pk_original", "public_id" => "original_pid")
       end
     end
 
@@ -91,17 +100,18 @@ RSpec.describe "Users", type: :request do
 
   describe "GET /users/me" do
     context "プロビジョニング済み" do
-      let!(:user) { create(:user, external_user_id: default_sub, name: "Alice", public_key: "pk_abc") }
+      let!(:user) { create(:user, external_user_id: default_sub, name: "Alice", public_key: "pk_abc", public_id: "alice") }
 
       it "200 と User 情報を返す" do
         get("/users/me")
 
         expect(response).to have_http_status(:ok)
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id name public_key balance_fuju created_at])
+        expect(parsed.keys).to match_array(%w[id name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "id" => user.id,
           "name" => "Alice",
+          "public_id" => "alice",
           "public_key" => "pk_abc",
           "balance_fuju" => 0,
         )

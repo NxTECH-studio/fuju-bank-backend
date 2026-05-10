@@ -60,6 +60,80 @@ RSpec.describe User, type: :model do
         expect(user).to be_valid
       end
     end
+
+    describe "public_id" do
+      it "nil でも valid（lazy プロビジョニング想定）" do
+        user = build(:user, public_id: nil)
+        expect(user).to be_valid
+      end
+
+      it "英数字 + _- 3〜32 文字なら valid" do
+        user = build(:user, public_id: "alice_01-AB")
+        expect(user).to be_valid
+      end
+
+      it "下限ちょうど 3 文字なら valid（境界 inclusive）" do
+        user = build(:user, public_id: "abc")
+        expect(user).to be_valid
+      end
+
+      it "上限ちょうど 32 文字なら valid（境界 inclusive）" do
+        user = build(:user, public_id: "a" * 32)
+        expect(user).to be_valid
+      end
+
+      it "空文字は invalid" do
+        user = build(:user, public_id: "")
+        expect(user).not_to be_valid
+        expect(user.errors[:public_id]).to be_present
+      end
+
+      it "2 文字だと invalid" do
+        user = build(:user, public_id: "ab")
+        expect(user).not_to be_valid
+        expect(user.errors[:public_id]).to be_present
+      end
+
+      it "33 文字だと invalid" do
+        user = build(:user, public_id: "a" * 33)
+        expect(user).not_to be_valid
+        expect(user.errors[:public_id]).to be_present
+      end
+
+      # `\A...\z` ではなく `^...$` 等への誤改修で改行を許容しないよう回帰防止
+      ["alice\n", " alice", "alice ", "al ice"].each do |bad|
+        it "空白・改行を含む #{bad.inspect} は invalid" do
+          user = build(:user, public_id: bad)
+          expect(user).not_to be_valid
+          expect(user.errors[:public_id]).to be_present
+        end
+      end
+
+      it "許可されない文字（マルチバイト）を含むと invalid" do
+        user = build(:user, public_id: "アリス")
+        expect(user).not_to be_valid
+        expect(user.errors[:public_id]).to be_present
+      end
+
+      it "許可されない記号（@ 等）を含むと invalid" do
+        user = build(:user, public_id: "alice@example")
+        expect(user).not_to be_valid
+        expect(user.errors[:public_id]).to be_present
+      end
+
+      it "同じ public_id を持つ 2 件目は uniqueness で invalid" do
+        create(:user, public_id: "alice")
+        duplicate = build(:user, public_id: "alice")
+        expect(duplicate).not_to be_valid
+        expect(duplicate.errors[:public_id]).to be_present
+      end
+
+      it "public_id = nil は重複してもよい" do
+        create(:user, public_id: nil)
+        another = build(:user, public_id: nil)
+        expect(another).to be_valid
+      end
+    end
   end
 
   describe "after_create bootstrap_account!" do

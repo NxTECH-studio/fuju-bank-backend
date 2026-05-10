@@ -2,14 +2,15 @@
 # 無ければ同一トランザクション内で User + Account(kind: "user") を作成する。
 # 新規作成かどうかは戻り値の `previously_new_record?` で判定できる。
 class UserProvisioner
-  def self.call(external_user_id:, name: nil, public_key: nil)
-    new(external_user_id: external_user_id, name: name, public_key: public_key).call
+  def self.call(external_user_id:, name: nil, public_key: nil, public_id: nil)
+    new(external_user_id: external_user_id, name: name, public_key: public_key, public_id: public_id).call
   end
 
-  def initialize(external_user_id:, name:, public_key:)
+  def initialize(external_user_id:, name:, public_key:, public_id:)
     @external_user_id = external_user_id
     @name = name
     @public_key = public_key
+    @public_id = public_id
   end
 
   def call
@@ -23,7 +24,12 @@ class UserProvisioner
 
   def create_user!
     ApplicationRecord.transaction do
-      User.create!(external_user_id: @external_user_id, name: @name, public_key: @public_key)
+      User.create!(
+        external_user_id: @external_user_id,
+        name: @name,
+        public_key: @public_key,
+        public_id: @public_id,
+      )
     end
   rescue ActiveRecord::RecordNotUnique
     # 並行リクエストで同一 sub の User が別トランザクションで先に作られたケース。

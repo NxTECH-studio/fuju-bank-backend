@@ -30,6 +30,11 @@ RSpec.describe UserProvisioner do
         expect(user).to have_attributes(name: "Alice", public_key: "pk_abc")
       end
 
+      it "public_id を指定した場合、その値で作成される" do
+        user = described_class.call(external_user_id: external_user_id, public_id: "alice")
+        expect(user.public_id).to eq("alice")
+      end
+
       it "作成された Account の balance_fuju は 0" do
         user = described_class.call(external_user_id: external_user_id)
         expect(user.account.balance_fuju).to eq(0)
@@ -42,7 +47,7 @@ RSpec.describe UserProvisioner do
     end
 
     context "既存取得" do
-      let!(:existing_user) { create(:user, external_user_id: external_user_id, name: "Original", public_key: "pk_original") }
+      let!(:existing_user) { create(:user, external_user_id: external_user_id, name: "Original", public_key: "pk_original", public_id: "original_pid") }
 
       it "レコードは増えない" do
         expect { described_class.call(external_user_id: external_user_id) }
@@ -53,9 +58,9 @@ RSpec.describe UserProvisioner do
         expect(described_class.call(external_user_id: external_user_id)).to eq(existing_user)
       end
 
-      it "name / public_key を渡しても既存属性は更新されない（idempotent）" do
-        described_class.call(external_user_id: external_user_id, name: "Updated", public_key: "pk_updated")
-        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original")
+      it "name / public_key / public_id を渡しても既存属性は更新されない（idempotent）" do
+        described_class.call(external_user_id: external_user_id, name: "Updated", public_key: "pk_updated", public_id: "updated_pid")
+        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original", public_id: "original_pid")
       end
 
       it "戻り値の previously_new_record? は false" do
