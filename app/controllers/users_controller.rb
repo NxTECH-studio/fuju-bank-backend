@@ -1,6 +1,13 @@
-# /users/me 系エンドポイントを提供する。
+# /users/me 系エンドポイントと、送金先 lookup（GET /users/lookup）を提供する。
 # external_user_id は JWT の sub から取得し、クライアント params からは受け取らない。
+#
+# `lookup` のみ AuthCore の introspection で active=true を要求する
+# （public_id 総当たりによる enumeration 抑止のため）。それ以外の参照系
+# （show / show_me / upsert_me）はローカル JWT 検証のみで通す既存挙動を維持する。
 class UsersController < ApplicationController
+  include IntrospectionRequired
+
+  skip_before_action :verify_introspection!, except: %i[lookup]
   before_action :require_current_user!, only: %i[show show_me]
 
   def show
@@ -18,9 +25,22 @@ class UsersController < ApplicationController
       external_user_id: current_external_user_id,
       name: upsert_params[:name],
       public_key: upsert_params[:public_key],
+      public_id: upsert_params[:public_id],
     )
     status = user.previously_new_record? ? :created : :ok
     render(json: serialize_user(user), status: status)
+  end
+
+  # 送金 UI が `表示名 / public_id → bank 内部 user id` を解決するための公開 API。
+  # public_id は AuthCore 側で一意保証されているため、結果は 0 or 1 件に収束する。
+  def lookup
+    public_id = lookup_params[:public_id]
+    validate_public_id!(public_id)
+
+    user = User.find_by(public_id: public_id)
+    raise ActiveRecord::RecordNotFound.new("ユーザーが見つかりません") if user.nil?
+
+    render(json: serialize_lookup(user))
   end
 
   private
@@ -30,16 +50,41 @@ class UsersController < ApplicationController
   end
 
   def upsert_params
-    params.permit(:name, :public_key)
+    params.permit(:name, :public_key, :public_id)
+  end
+
+  def lookup_params
+    params.permit(:public_id)
+  end
+
+  # public_id 必須 + AuthCore の public_id フォーマット（英数字 + _-、3〜32 文字）。
+  # 実体は User::PUBLIC_ID_REGEX と揃える。
+  def validate_public_id!(public_id)
+    raise ValidationFailedError.new(message: "public_id is required") if public_id.blank?
+    raise ValidationFailedError.new(message: "public_id is invalid") unless User::PUBLIC_ID_REGEX.match?(public_id)
   end
 
   def serialize_user(user)
     {
       id: user.id,
       name: user.name,
+      public_id: user.public_id,
       public_key: user.public_key,
       balance_fuju: user.account.balance_fuju,
       created_at: user.created_at.iso8601,
+    }
+  end
+
+  # lookup 結果は送金 UI で必要最小限のフィールドのみ返す。
+  # email / balance_fuju / mfa_enabled / created_at 等はプライバシー観点で返さない。
+  # icon_url は AuthCore の値を bank 側に持たないため現状は常に null
+  # （AuthCore からの取得経路ができたら埋める予定 / DTO は破壊的変更なしで拡張可能）。
+  def serialize_lookup(user)
+    {
+      id: user.id,
+      public_id: user.public_id,
+      name: user.name,
+      icon_url: nil,
     }
   end
 end
