@@ -57,8 +57,6 @@ class UsersController < ApplicationController
     params.permit(:public_id)
   end
 
-  # public_id 必須 + AuthCore の public_id フォーマット（英数字 + _-、3〜32 文字）。
-  # 実体は User::PUBLIC_ID_REGEX と揃える。
   def validate_public_id!(public_id)
     raise ValidationFailedError.new(message: "public_id is required") if public_id.blank?
     raise ValidationFailedError.new(message: "public_id is invalid") unless User::PUBLIC_ID_REGEX.match?(public_id)
@@ -75,10 +73,8 @@ class UsersController < ApplicationController
     }
   end
 
-  # lookup 結果は送金 UI で必要最小限のフィールドのみ返す。
-  # email / balance_fuju / mfa_enabled / created_at 等はプライバシー観点で返さない。
-  # icon_url は AuthCore の値を bank 側に持たないため現状は常に null
-  # （AuthCore からの取得経路ができたら埋める予定 / DTO は破壊的変更なしで拡張可能）。
+  # email / balance_fuju / public_key / created_at はプライバシー観点で返さない。
+  # icon_url は AuthCore からの取得経路ができるまで常に null。
   def serialize_lookup(user)
     {
       id: user.id,

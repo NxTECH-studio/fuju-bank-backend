@@ -4,9 +4,6 @@ class User < ApplicationRecord
   ULID_REGEX = /\A[0-9A-HJKMNP-TV-Z]{26}\z/
 
   # AuthCore の public_id 仕様準拠（英数字 + `_`/`-`、3〜32 文字）。
-  # 送金 UI から `GET /users/lookup?public_id=xxx` で逆引きするためのキーで、
-  # AuthCore 側で一意保証されている前提を bank 側でも DB unique 制約と
-  # モデルバリデーションの両方で守る。
   PUBLIC_ID_REGEX = /\A[a-zA-Z0-9_-]{3,32}\z/
 
   has_one :account, dependent: :restrict_with_exception
