@@ -62,6 +62,7 @@ transfer (User → User):
 |---|---|---|---|
 | `POST` | `/users` | User 作成 | ローカル JWT |
 | `GET` | `/users/:id` | User 情報 + 残高取得 | ローカル JWT |
+| `GET` | `/users/search?q=:q&limit=:n` | 送金先検索（表示名 ILIKE 部分一致、最大 20 件、自分除外） | ローカル JWT + introspection |
 | `GET` | `/users/:id/transactions` | 取引履歴（mint / transfer 統合） | ローカル JWT |
 | `POST` | `/artifacts` | Artifact 作成 | ローカル JWT |
 | `GET` | `/artifacts/:id` | Artifact 情報 | ローカル JWT |

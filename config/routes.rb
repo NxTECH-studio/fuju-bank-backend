@@ -9,6 +9,7 @@ Rails.application.routes.draw do
     collection do
       get :me, to: "users#show_me"
       post :me, to: "users#upsert_me"
+      get :search, to: "users#search"
     end
     resources :transactions, only: %i[index], controller: "user_transactions"
   end
