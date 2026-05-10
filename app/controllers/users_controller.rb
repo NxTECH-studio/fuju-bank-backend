@@ -4,6 +4,10 @@
 # `search` のみ AuthCore の introspection で active=true を要求する
 # （public_id ハンドルの enumeration 抑止のため）。それ以外の参照系
 # （show / show_me / upsert_me）はローカル JWT 検証のみで通す既存挙動を維持する。
+#
+# 検索は AuthCore /v1/users/search (Basic Auth) に委譲する。bank.users.public_id は
+# 旧クライアントから upsert された分しか入っていないため、directory の一次ソースは
+# AuthCore に置く（users-search-cross-service-identity.md 参照）。
 class UsersController < ApplicationController
   include IntrospectionRequired
 
@@ -13,7 +17,8 @@ class UsersController < ApplicationController
   SEARCH_DEFAULT_LIMIT = 10
   SEARCH_MAX_LIMIT = 20
   SEARCH_QUERY_MIN_LENGTH = 2
-  SEARCH_QUERY_MAX_LENGTH = 64
+  SEARCH_QUERY_MAX_LENGTH = 32
+  SEARCH_QUERY_REGEX = /\A[a-zA-Z0-9]+\z/
 
   def show
     raise AuthorizationError.new(message: "他のユーザー情報は参照できません") if params[:id].to_s != current_user.id.to_s
@@ -37,20 +42,17 @@ class UsersController < ApplicationController
   end
 
   # 送金 UI が「ハンドル (public_id) で候補を絞り込む」ための公開 API。
-  # users.public_id を大文字小文字無視の前方一致で検索し、最大 limit 件（デフォルト 10 / 上限 20）を返す。
-  # 自分自身は API 側で常に除外する。0 件は 200 + 空配列を返す（404 ではない）。
+  # AuthCore /v1/users/search に委譲して public_id の前方一致 (大小無視) を取得し、
+  # caller 自身を後段で除外する。0 件は 200 + 空配列を返す（404 ではない）。
   def search
     q = search_query_params[:q].to_s.strip
     validate_search_query!(q)
     limit = parse_search_limit(search_query_params[:limit])
 
-    users = User.where("LOWER(public_id) LIKE LOWER(?)", "#{ActiveRecord::Base.sanitize_sql_like(q)}%")
-      .where.not(id: current_user.id)
-      .order(:id)
-      .limit(limit)
-      .select(:id, :public_id)
+    hits = Authcore::UserSearchClient.call(query: q, limit: limit)
+    filtered = hits.reject { |u| u["id"] == current_external_user_id }
 
-    render(json: { users: users.map { |u| serialize_search_hit(u) } })
+    render(json: { users: filtered.map { |u| serialize_search_hit(u) } })
   end
 
   private
@@ -71,6 +73,7 @@ class UsersController < ApplicationController
     raise ValidationFailedError.new(message: "q is required") if query.blank?
     raise ValidationFailedError.new(message: "q must be at least #{SEARCH_QUERY_MIN_LENGTH} characters") if query.length < SEARCH_QUERY_MIN_LENGTH
     raise ValidationFailedError.new(message: "q must be at most #{SEARCH_QUERY_MAX_LENGTH} characters") if query.length > SEARCH_QUERY_MAX_LENGTH
+    raise ValidationFailedError.new(message: "q must be alphanumeric") unless SEARCH_QUERY_REGEX.match?(query)
   end
 
   def parse_search_limit(raw)
@@ -95,13 +98,13 @@ class UsersController < ApplicationController
     }
   end
 
+  # AuthCore レスポンス形 ({ "id", "public_id", "icon_url" }) を bank API のキー順に整形して返す。
   # email / balance_fuju / public_key / created_at はプライバシー観点で返さない。
-  # icon_url は AuthCore からの取得経路ができるまで常に null。
-  def serialize_search_hit(user)
+  def serialize_search_hit(hit)
     {
-      id: user.id,
-      public_id: user.public_id,
-      icon_url: nil,
+      id: hit["id"],
+      public_id: hit["public_id"],
+      icon_url: hit["icon_url"],
     }
   end
 end
