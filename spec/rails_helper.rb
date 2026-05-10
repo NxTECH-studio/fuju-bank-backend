@@ -29,4 +29,5 @@ RSpec.configure do |config|
   config.include AuthHelpers, type: :channel
   config.include AuthenticatedRequest, type: :request
   config.include IntrospectionStubs, type: :request
+  config.include AuthcoreUserSearchStubs, type: :request
 end
