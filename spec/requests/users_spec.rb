@@ -80,11 +80,18 @@ RSpec.describe "Users", type: :request do
         expect(response).to have_http_status(:ok)
       end
 
-      it "既存ユーザーの属性は body 値で上書きされない（public_id 含む）" do
-        post("/users/me", params: { name: "Updated", public_key: "pk_updated", public_id: "updated_pid" })
+      it "name / public_key は body 値で上書きされない（最小 C スコープ: public_id のみ更新）" do
+        post("/users/me", params: { name: "Updated", public_key: "pk_updated" })
 
-        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original", public_id: "original_pid")
-        expect(response.parsed_body).to include("name" => "Original", "public_key" => "pk_original", "public_id" => "original_pid")
+        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original")
+        expect(response.parsed_body).to include("name" => "Original", "public_key" => "pk_original")
+      end
+
+      it "public_id は body 値で上書きされる（AuthCore 側 public_id 変更を bank へ伝播）" do
+        post("/users/me", params: { public_id: "updated_pid" })
+
+        expect(existing_user.reload.public_id).to eq("updated_pid")
+        expect(response.parsed_body).to include("public_id" => "updated_pid")
       end
     end
 

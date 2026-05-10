@@ -58,14 +58,54 @@ RSpec.describe UserProvisioner do
         expect(described_class.call(external_user_id: external_user_id)).to eq(existing_user)
       end
 
-      it "name / public_key / public_id を渡しても既存属性は更新されない（idempotent）" do
-        described_class.call(external_user_id: external_user_id, name: "Updated", public_key: "pk_updated", public_id: "updated_pid")
-        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original", public_id: "original_pid")
+      it "public_id を渡せば既存値が上書きされる（AuthCore 側 public_id 変更を bank へ伝播）" do
+        described_class.call(external_user_id: external_user_id, public_id: "updated_pid")
+        expect(existing_user.reload.public_id).to eq("updated_pid")
+      end
+
+      it "public_id が nil の場合は既存値を維持する" do
+        described_class.call(external_user_id: external_user_id, public_id: nil)
+        expect(existing_user.reload.public_id).to eq("original_pid")
+      end
+
+      it "同じ public_id を渡しても updated_at が動かない（no-op）" do
+        travel_to(2.days.from_now) do
+          expect { described_class.call(external_user_id: external_user_id, public_id: "original_pid") }
+            .not_to(change { existing_user.reload.updated_at })
+        end
+      end
+
+      it "name / public_key を渡しても既存属性は更新されない（最小 C スコープ: public_id のみ更新）" do
+        described_class.call(external_user_id: external_user_id, name: "Updated", public_key: "pk_updated")
+        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original")
       end
 
       it "戻り値の previously_new_record? は false" do
         user = described_class.call(external_user_id: external_user_id)
         expect(user.previously_new_record?).to be(false)
+      end
+    end
+
+    context "既存ユーザーの public_id が NULL の場合（旧クライアントで作成された legacy レコード）" do
+      let!(:legacy_user) { create(:user, external_user_id: external_user_id, public_id: nil) }
+
+      it "AuthCore から渡された public_id で充填される（本タスクの主目的）" do
+        described_class.call(external_user_id: external_user_id, public_id: "alice")
+        expect(legacy_user.reload.public_id).to eq("alice")
+      end
+    end
+
+    context "public_id 衝突時の挙動" do
+      let!(:other_user) { create(:user, public_id: "taken") }
+      let!(:existing_user) { create(:user, external_user_id: external_user_id, public_id: "original_pid") }
+
+      # AuthCore でユーザー Y がリネームしたが bank 側に古い所有者 X が残っているケース。
+      # ここで raise すると Y の認証付き全 API が 5xx になるため、bank は同期を諦める。
+      it "他ユーザーが先に保有している public_id を渡されたら同期を諦め、既存値のまま返す" do
+        result = described_class.call(external_user_id: external_user_id, public_id: "taken")
+
+        expect(result.public_id).to eq("original_pid")
+        expect(existing_user.reload.public_id).to eq("original_pid")
       end
     end
 
