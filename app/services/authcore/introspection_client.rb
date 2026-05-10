@@ -2,6 +2,8 @@
 # 成功時: IntrospectionResult を返す
 # active=false: TokenInactiveError を raise（フェイルクローズ）
 # HTTP / ネットワーク失敗: AuthcoreUnavailableError を raise
+require "net/http"
+
 class Authcore::IntrospectionClient
   ENDPOINT_PATH = "/v1/auth/introspect".freeze
   TIMEOUT_SECONDS = 3
