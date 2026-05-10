@@ -28,6 +28,7 @@
 | [prod-action-cable-solid-adapter-and-origins.md](./prod-action-cable-solid-adapter-and-origins.md) | production の ActionCable を Solid Cable + 非ブラウザ許可に揃える | 完了 |
 | [qr-payment-foundation-mpm/](./qr-payment-foundation-mpm/) | QR 決済基盤 (MPM) MVP（STEP 01〜07、03 までマージ済み） | 進行中 |
 | [server-bank-22-recipient-resolution-api.md](./server-bank-22-recipient-resolution-api.md) | 送金先検索 API（`GET /users/search?q=xxx`、表示名 ILIKE 部分一致）— クライアント送金機能 (`fuju-bank-app#client-bank-22`) のブロッカー解消 | 進行中（pg_trgm / AuditLog / rack-attack / icon_url / backfill は別タスク） |
+| [users-search-by-public-id.md](./users-search-by-public-id.md) | `GET /users/search` を `public_id` 前方一致（大文字小文字無視）に切り替え（staging で空配列しか返らない問題の解消、AuthCore のハンドル世界観に整合） | 完了 |
 | [server-bank-23-transfer-mfa-verify-flow.md](./server-bank-23-transfer-mfa-verify-flow.md) | 送金時 MFA 解消経路の仕様確定（AuthCore `POST /v1/auth/mfa/step-up` 新設候補） | 仕様確認済み（bank-backend コード変更 0 行、AuthCore 実装待ち） |
 
 ## 削除済み（履歴のみ Git ログから復元可能）

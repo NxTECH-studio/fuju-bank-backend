@@ -2,7 +2,7 @@
 # external_user_id は JWT の sub から取得し、クライアント params からは受け取らない。
 #
 # `search` のみ AuthCore の introspection で active=true を要求する
-# （表示名 enumeration 抑止のため）。それ以外の参照系
+# （public_id ハンドルの enumeration 抑止のため）。それ以外の参照系
 # （show / show_me / upsert_me）はローカル JWT 検証のみで通す既存挙動を維持する。
 class UsersController < ApplicationController
   include IntrospectionRequired
@@ -36,18 +36,19 @@ class UsersController < ApplicationController
     render(json: serialize_user(user), status: status)
   end
 
-  # 送金 UI が「表示名で候補を絞り込む」ための公開 API。
-  # users.name を ILIKE 部分一致で検索し、最大 limit 件（デフォルト 10 / 上限 20）を返す。
+  # 送金 UI が「ハンドル (public_id) で候補を絞り込む」ための公開 API。
+  # users.public_id を大文字小文字無視の前方一致で検索し、最大 limit 件（デフォルト 10 / 上限 20）を返す。
   # 自分自身は API 側で常に除外する。0 件は 200 + 空配列を返す（404 ではない）。
   def search
     q = search_query_params[:q].to_s.strip
     validate_search_query!(q)
     limit = parse_search_limit(search_query_params[:limit])
 
-    users = User.where("name ILIKE ?", "%#{ActiveRecord::Base.sanitize_sql_like(q)}%")
+    users = User.where("LOWER(public_id) LIKE LOWER(?)", "#{ActiveRecord::Base.sanitize_sql_like(q)}%")
       .where.not(id: current_user.id)
       .order(:id)
       .limit(limit)
+      .select(:id, :public_id)
 
     render(json: { users: users.map { |u| serialize_search_hit(u) } })
   end
@@ -100,7 +101,6 @@ class UsersController < ApplicationController
     {
       id: user.id,
       public_id: user.public_id,
-      name: user.name,
       icon_url: nil,
     }
   end
