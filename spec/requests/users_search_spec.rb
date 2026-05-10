@@ -82,7 +82,7 @@ RSpec.describe "GET /users/search", type: :request do
   end
 
   context "limit" do
-    let!(:targets) { Array.new(25) { |i| create(:user, public_id: format("sample%02d", i)) } }
+    let!(:targets) { Array.new(21) { |i| create(:user, public_id: format("sample%02d", i)) } }
 
     it "デフォルト 10 件返す" do
       get("/users/search", params: { q: "sample" })

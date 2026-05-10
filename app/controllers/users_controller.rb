@@ -48,6 +48,7 @@ class UsersController < ApplicationController
       .where.not(id: current_user.id)
       .order(:id)
       .limit(limit)
+      .select(:id, :public_id)
 
     render(json: { users: users.map { |u| serialize_search_hit(u) } })
   end
