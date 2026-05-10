@@ -95,66 +95,40 @@ RSpec.describe Authcore::UserSearchClient do
       end
     end
 
-    context "400 (validation error) の場合" do
-      before do
-        stub_request(:get, endpoint_url).with(query: hash_including({})).to_return(status: 400, body: "")
+    context "AuthCore 障害 / 異常レスポンスの場合" do
+      let!(:base_stub) { stub_request(:get, endpoint_url).with(query: hash_including({})) }
+
+      [
+        ["400 (validation error)", { status: 400, body: "" }],
+        ["401 (client 認証失敗)", { status: 401, body: "" }],
+        ["500", { status: 500, body: "" }],
+      ].each do |label, response|
+        it "#{label} で AuthcoreUnavailableError を raise する" do
+          base_stub.to_return(**response)
+
+          expect { described_class.call(query: "ali", limit: 10) }.to raise_error(AuthcoreUnavailableError)
+        end
       end
 
-      it "AuthcoreUnavailableError を raise する" do
+      it "タイムアウトで AuthcoreUnavailableError を raise する" do
+        base_stub.to_timeout
+
         expect { described_class.call(query: "ali", limit: 10) }.to raise_error(AuthcoreUnavailableError)
       end
-    end
 
-    context "401 (client 認証失敗) の場合" do
-      before do
-        stub_request(:get, endpoint_url).with(query: hash_including({})).to_return(status: 401, body: "")
-      end
+      it "接続失敗で AuthcoreUnavailableError を raise する" do
+        base_stub.to_raise(Errno::ECONNREFUSED)
 
-      it "AuthcoreUnavailableError を raise する" do
         expect { described_class.call(query: "ali", limit: 10) }.to raise_error(AuthcoreUnavailableError)
       end
-    end
 
-    context "500 の場合" do
-      before do
-        stub_request(:get, endpoint_url).with(query: hash_including({})).to_return(status: 500, body: "")
-      end
-
-      it "AuthcoreUnavailableError を raise する" do
-        expect { described_class.call(query: "ali", limit: 10) }.to raise_error(AuthcoreUnavailableError)
-      end
-    end
-
-    context "タイムアウトの場合" do
-      before do
-        stub_request(:get, endpoint_url).with(query: hash_including({})).to_timeout
-      end
-
-      it "AuthcoreUnavailableError を raise する" do
-        expect { described_class.call(query: "ali", limit: 10) }.to raise_error(AuthcoreUnavailableError)
-      end
-    end
-
-    context "接続失敗の場合" do
-      before do
-        stub_request(:get, endpoint_url).with(query: hash_including({})).to_raise(Errno::ECONNREFUSED)
-      end
-
-      it "AuthcoreUnavailableError を raise する" do
-        expect { described_class.call(query: "ali", limit: 10) }.to raise_error(AuthcoreUnavailableError)
-      end
-    end
-
-    context "JSON が不正な場合" do
-      before do
-        stub_request(:get, endpoint_url).with(query: hash_including({})).to_return(
+      it "JSON が不正な場合は「解釈できません」付きで raise する" do
+        base_stub.to_return(
           status: 200,
           body: "not-json",
           headers: { "Content-Type" => "application/json" },
         )
-      end
 
-      it "AuthcoreUnavailableError を raise する" do
         expect { described_class.call(query: "ali", limit: 10) }
           .to raise_error(AuthcoreUnavailableError, /解釈できません/)
       end

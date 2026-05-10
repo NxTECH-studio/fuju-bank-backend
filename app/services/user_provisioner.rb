@@ -3,8 +3,8 @@
 # 新規作成かどうかは戻り値の `previously_new_record?` で判定できる。
 #
 # 既存ユーザーの場合、`public_id` が非 nil なら既存値を上書きする。
-# AuthCore 側で public_id が変更されたとき bank に伝播させる経路がここしかなく、
-# 旧来「既存なら何もしない」だと検索 / directory 系が古い handle のままになるため。
+# AuthCore -> bank の public_id 伝播経路がここしか無く、上書きしないと
+# 検索 / directory 系が古い handle のままになるため。
 class UserProvisioner
   def self.call(external_user_id:, name: nil, public_key: nil, public_id: nil)
     new(external_user_id: external_user_id, name: name, public_key: public_key, public_id: public_id).call

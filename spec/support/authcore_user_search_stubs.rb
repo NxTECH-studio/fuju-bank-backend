@@ -2,15 +2,11 @@ module AuthcoreUserSearchStubs
   USER_SEARCH_ENDPOINT = "https://auth.fuju.example/v1/users/search".freeze
 
   def stub_authcore_user_search(users:, query: nil, limit: nil)
-    matcher = { query: hash_including({}) }
-    if query.present? || limit.present?
-      filter = {}
-      filter[:q] = query if query.present?
-      filter[:limit] = limit.to_s if limit.present?
-      matcher = { query: hash_including(filter) }
-    end
+    filter = {}
+    filter[:q] = query if query.present?
+    filter[:limit] = limit.to_s if limit.present?
 
-    stub_request(:get, USER_SEARCH_ENDPOINT).with(**matcher).to_return(
+    stub_request(:get, USER_SEARCH_ENDPOINT).with(query: hash_including(filter)).to_return(
       status: 200,
       body: { "users" => users }.to_json,
       headers: { "Content-Type" => "application/json" },

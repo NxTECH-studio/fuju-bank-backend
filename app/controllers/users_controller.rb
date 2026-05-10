@@ -17,6 +17,8 @@ class UsersController < ApplicationController
   SEARCH_DEFAULT_LIMIT = 10
   SEARCH_MAX_LIMIT = 20
   SEARCH_QUERY_MIN_LENGTH = 2
+  # AuthCore /v1/users/search の制約 (alphanumeric, 2-32 文字) に揃えて、AuthCore に投げる前に
+  # bank で 400 を返す。仕様逸脱時に往復コストを払わずに済ませるため。
   SEARCH_QUERY_MAX_LENGTH = 32
   SEARCH_QUERY_REGEX = /\A[a-zA-Z0-9]+\z/
 
@@ -50,6 +52,8 @@ class UsersController < ApplicationController
     limit = parse_search_limit(search_query_params[:limit])
 
     hits = Authcore::UserSearchClient.call(query: q, limit: limit)
+    # AuthCore レスポンスの "id" は ULID で、bank の external_user_id (= JWT sub) と同値。
+    # 自己除外を bank 側で後段フィルタとして実施する（AuthCore に caller を渡す経路を作らないため）。
     filtered = hits.reject { |u| u["id"] == current_external_user_id }
 
     render(json: { users: filtered.map { |u| serialize_search_hit(u) } })
@@ -98,7 +102,6 @@ class UsersController < ApplicationController
     }
   end
 
-  # AuthCore レスポンス形 ({ "id", "public_id", "icon_url" }) を bank API のキー順に整形して返す。
   # email / balance_fuju / public_key / created_at はプライバシー観点で返さない。
   def serialize_search_hit(hit)
     {
