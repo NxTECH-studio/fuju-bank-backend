@@ -27,6 +27,8 @@
 | [docs-overhaul.md](./docs-overhaul.md) | README / CLAUDE.md / docs/tasks の横断ドキュメントリファクタ | 進行中（本タスク） |
 | [prod-action-cable-solid-adapter-and-origins.md](./prod-action-cable-solid-adapter-and-origins.md) | production の ActionCable を Solid Cable + 非ブラウザ許可に揃える | 完了 |
 | [qr-payment-foundation-mpm/](./qr-payment-foundation-mpm/) | QR 決済基盤 (MPM) MVP（STEP 01〜07、03 までマージ済み） | 進行中 |
+| [server-bank-22-recipient-resolution-api.md](./server-bank-22-recipient-resolution-api.md) | 受取人解決 API（`GET /users/lookup?public_id=xxx`）— クライアント送金機能 (`fuju-bank-app#client-bank-22`) のブロッカー解消 | 進行中（rate limit / icon_url / backfill は別タスク） |
+| [server-bank-23-transfer-mfa-verify-flow.md](./server-bank-23-transfer-mfa-verify-flow.md) | 送金時 MFA 解消経路の仕様確定（AuthCore `POST /v1/auth/mfa/step-up` 新設候補） | 未着手 |
 
 ## 削除済み（履歴のみ Git ログから復元可能）
 
