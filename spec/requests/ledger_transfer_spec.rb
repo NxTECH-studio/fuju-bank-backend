@@ -44,6 +44,7 @@ RSpec.describe "Ledger Transfer", type: :request do
           "new_balance" => 450,
         )
         expect(parsed["occurred_at"]).to match(/\A\d{4}-\d{2}-\d{2}T/)
+        expect(parsed["transaction_id"]).to be_a(String).and(match(/\A\d+\z/))
       end
 
       it "metadata にネスト Hash を渡すと JSONB にそのまま保存される" do

@@ -32,7 +32,7 @@ class UserTransactionsController < ApplicationController
     tx = entry.ledger_transaction
     {
       entry_id: entry.id,
-      transaction_id: tx.id,
+      transaction_id: tx.id.to_s,
       transaction_kind: tx.kind,
       direction: entry.amount > 0 ? "credit" : "debit",
       amount: entry.amount.abs,

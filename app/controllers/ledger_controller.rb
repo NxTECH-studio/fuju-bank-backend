@@ -124,7 +124,7 @@ class LedgerController < ApplicationController
 
   def serialize_transaction(transaction)
     {
-      transaction_id: transaction.id,
+      transaction_id: transaction.id.to_s,
       kind: transaction.kind,
       artifact_id: transaction.artifact_id,
       idempotency_key: transaction.idempotency_key,

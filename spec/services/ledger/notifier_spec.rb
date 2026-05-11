@@ -31,7 +31,7 @@ RSpec.describe Ledger::Notifier do
           .to have_broadcasted_to(user).from_channel(UserChannel).with do |payload|
             expect(payload[:type]).to eq("credit")
             expect(payload[:amount]).to eq(amount)
-            expect(payload[:transaction_id]).to eq(tx.id)
+            expect(payload[:transaction_id]).to eq(tx.id.to_s)
             expect(payload[:transaction_kind]).to eq("mint")
             expect(payload[:artifact_id]).to eq(artifact.id)
             expect(payload[:from_user_id]).to be_nil
