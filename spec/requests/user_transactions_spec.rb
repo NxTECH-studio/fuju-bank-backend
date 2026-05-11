@@ -60,7 +60,7 @@ RSpec.describe "User Transactions", type: :request do
         expect(response).to have_http_status(:ok)
         data = response.parsed_body["data"]
         expect(data.size).to eq(3)
-        expect(data.pluck("transaction_id")).to eq([received_tx.id, sent_tx.id, mint_tx.id])
+        expect(data.pluck("transaction_id")).to eq([received_tx.id.to_s, sent_tx.id.to_s, mint_tx.id.to_s])
       end
 
       it "mint の entry は credit / artifact_id あり / counterparty_user_id は nil" do
@@ -68,7 +68,7 @@ RSpec.describe "User Transactions", type: :request do
 
         mint_entry = response.parsed_body["data"].find { |e| e["transaction_kind"] == "mint" }
         expect(mint_entry).to include(
-          "transaction_id" => mint_tx.id,
+          "transaction_id" => mint_tx.id.to_s,
           "transaction_kind" => "mint",
           "direction" => "credit",
           "amount" => 300,
@@ -80,7 +80,7 @@ RSpec.describe "User Transactions", type: :request do
       it "transfer の送信 entry は debit / counterparty_user_id は受信者" do
         get("/users/#{user.id}/transactions")
 
-        sent_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == sent_tx.id }
+        sent_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == sent_tx.id.to_s }
         expect(sent_entry).to include(
           "transaction_kind" => "transfer",
           "direction" => "debit",
@@ -94,7 +94,7 @@ RSpec.describe "User Transactions", type: :request do
       it "transfer の受信 entry は credit / counterparty_user_id は送信者" do
         get("/users/#{user.id}/transactions")
 
-        recv_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == received_tx.id }
+        recv_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == received_tx.id.to_s }
         expect(recv_entry).to include(
           "transaction_kind" => "transfer",
           "direction" => "credit",
@@ -134,7 +134,7 @@ RSpec.describe "User Transactions", type: :request do
         expect(response).to have_http_status(:ok)
         data = response.parsed_body["data"]
         expect(data.size).to eq(2)
-        expect(data.pluck("transaction_id")).to eq([txs[2].id, txs[1].id])
+        expect(data.pluck("transaction_id")).to eq([txs[2].id.to_s, txs[1].id.to_s])
       end
 
       it "limit 未指定ではデフォルト（最大 50）まで返る" do
