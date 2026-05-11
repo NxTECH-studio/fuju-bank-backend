@@ -9,7 +9,7 @@ class UserTransactionsController < ApplicationController
     account_id = user.account.id
     entries = LedgerEntry
       .where(account_id: account_id)
-      .preload(ledger_transaction: { entries: :account })
+      .preload(ledger_transaction: { entries: { account: :user } })
       .order(id: :desc)
       .limit(resolved_limit)
 
@@ -30,6 +30,7 @@ class UserTransactionsController < ApplicationController
 
   def serialize(entry, account_id)
     tx = entry.ledger_transaction
+    counterparty = counterparty_user(tx, account_id)
     {
       entry_id: entry.id,
       transaction_id: tx.id.to_s,
@@ -37,7 +38,8 @@ class UserTransactionsController < ApplicationController
       direction: entry.amount > 0 ? "credit" : "debit",
       amount: entry.amount.abs,
       artifact_id: tx.artifact_id,
-      counterparty_user_id: counterparty_user_id(tx, account_id),
+      counterparty_user_id: counterparty&.id&.to_s,
+      counterparty_public_id: counterparty&.public_id,
       memo: tx.memo,
       metadata: tx.metadata,
       occurred_at: tx.occurred_at.iso8601,
@@ -45,11 +47,10 @@ class UserTransactionsController < ApplicationController
     }
   end
 
-  def counterparty_user_id(transaction, account_id)
+  def counterparty_user(transaction, account_id)
     return nil unless transaction.transfer_kind?
 
     other_entry = transaction.entries.find { |e| e.account_id != account_id }
-    user_id = other_entry&.account&.user_id
-    user_id&.to_s
+    other_entry&.account&.user
   end
 end
