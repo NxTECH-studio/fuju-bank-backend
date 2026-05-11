@@ -63,7 +63,7 @@ RSpec.describe "User Transactions", type: :request do
         expect(data.pluck("transaction_id")).to eq([received_tx.id.to_s, sent_tx.id.to_s, mint_tx.id.to_s])
       end
 
-      it "mint の entry は credit / artifact_id あり / counterparty_user_id は nil" do
+      it "mint の entry は credit / artifact_id あり / counterparty は nil" do
         get("/users/#{user.id}/transactions")
 
         mint_entry = response.parsed_body["data"].find { |e| e["transaction_kind"] == "mint" }
@@ -74,10 +74,11 @@ RSpec.describe "User Transactions", type: :request do
           "amount" => 300,
           "artifact_id" => artifact.id,
           "counterparty_user_id" => nil,
+          "counterparty_public_id" => nil,
         )
       end
 
-      it "transfer の送信 entry は debit / counterparty_user_id は受信者" do
+      it "transfer の送信 entry は debit / counterparty は受信者" do
         get("/users/#{user.id}/transactions")
 
         sent_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == sent_tx.id.to_s }
@@ -87,11 +88,12 @@ RSpec.describe "User Transactions", type: :request do
           "amount" => 100,
           "artifact_id" => nil,
           "counterparty_user_id" => other_user.id.to_s,
+          "counterparty_public_id" => other_user.public_id,
           "memo" => "thanks",
         )
       end
 
-      it "transfer の受信 entry は credit / counterparty_user_id は送信者" do
+      it "transfer の受信 entry は credit / counterparty は送信者" do
         get("/users/#{user.id}/transactions")
 
         recv_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == received_tx.id.to_s }
@@ -100,6 +102,7 @@ RSpec.describe "User Transactions", type: :request do
           "direction" => "credit",
           "amount" => 50,
           "counterparty_user_id" => other_user.id.to_s,
+          "counterparty_public_id" => other_user.public_id,
         )
       end
 
@@ -110,11 +113,30 @@ RSpec.describe "User Transactions", type: :request do
         expect(sent_entry["counterparty_user_id"]).to be_a(String)
       end
 
+      it "transfer の counterparty_public_id は文字列で返る (クライアント JSON 契約)" do
+        get("/users/#{user.id}/transactions")
+
+        sent_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == sent_tx.id.to_s }
+        expect(sent_entry["counterparty_public_id"]).to be_a(String)
+      end
+
+      it "counterparty に public_id が未設定なら counterparty_public_id は nil で返る" do
+        other_user.update!(public_id: nil)
+
+        get("/users/#{user.id}/transactions")
+
+        sent_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == sent_tx.id.to_s }
+        expect(sent_entry).to include(
+          "counterparty_user_id" => other_user.id.to_s,
+          "counterparty_public_id" => nil,
+        )
+      end
+
       it "レスポンスの各 entry に想定キーが揃う" do
         get("/users/#{user.id}/transactions")
 
         expect(response.parsed_body["data"].first.keys).to match_array(
-          %w[entry_id transaction_id transaction_kind direction amount artifact_id counterparty_user_id memo metadata occurred_at created_at],
+          %w[entry_id transaction_id transaction_kind direction amount artifact_id counterparty_user_id counterparty_public_id memo metadata occurred_at created_at],
         )
       end
 
