@@ -86,7 +86,7 @@ RSpec.describe "User Transactions", type: :request do
           "direction" => "debit",
           "amount" => 100,
           "artifact_id" => nil,
-          "counterparty_user_id" => other_user.id,
+          "counterparty_user_id" => other_user.id.to_s,
           "memo" => "thanks",
         )
       end
@@ -99,8 +99,15 @@ RSpec.describe "User Transactions", type: :request do
           "transaction_kind" => "transfer",
           "direction" => "credit",
           "amount" => 50,
-          "counterparty_user_id" => other_user.id,
+          "counterparty_user_id" => other_user.id.to_s,
         )
+      end
+
+      it "transfer の counterparty_user_id は文字列で返る (クライアント JSON 契約)" do
+        get("/users/#{user.id}/transactions")
+
+        sent_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == sent_tx.id.to_s }
+        expect(sent_entry["counterparty_user_id"]).to be_a(String)
       end
 
       it "レスポンスの各 entry に想定キーが揃う" do
