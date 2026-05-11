@@ -86,7 +86,7 @@ RSpec.describe "User Transactions", type: :request do
           "direction" => "debit",
           "amount" => 100,
           "artifact_id" => nil,
-          "counterparty_user_id" => other_user.id,
+          "counterparty_user_id" => other_user.id.to_s,
           "memo" => "thanks",
         )
       end
@@ -99,7 +99,7 @@ RSpec.describe "User Transactions", type: :request do
           "transaction_kind" => "transfer",
           "direction" => "credit",
           "amount" => 50,
-          "counterparty_user_id" => other_user.id,
+          "counterparty_user_id" => other_user.id.to_s,
         )
       end
 

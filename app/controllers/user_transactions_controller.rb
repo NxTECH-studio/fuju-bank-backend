@@ -49,6 +49,7 @@ class UserTransactionsController < ApplicationController
     return nil unless transaction.transfer_kind?
 
     other_entry = transaction.entries.find { |e| e.account_id != account_id }
-    other_entry&.account&.user_id
+    user_id = other_entry&.account&.user_id
+    user_id&.to_s
   end
 end
