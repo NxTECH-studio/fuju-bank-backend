@@ -61,7 +61,10 @@ class LedgerController < ApplicationController
       occurred_at: parse_occurred_at(transfer_params[:occurred_at]),
     )
 
-    render(json: serialize_transaction(tx), status: :ok)
+    render(
+      json: serialize_transaction(tx).merge(new_balance: from_user.account.reload.balance_fuju),
+      status: :ok,
+    )
   end
 
   private
@@ -121,7 +124,7 @@ class LedgerController < ApplicationController
 
   def serialize_transaction(transaction)
     {
-      id: transaction.id,
+      transaction_id: transaction.id,
       kind: transaction.kind,
       artifact_id: transaction.artifact_id,
       idempotency_key: transaction.idempotency_key,

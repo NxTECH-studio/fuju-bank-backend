@@ -29,7 +29,7 @@ RSpec.describe "Ledger Mint", type: :request do
         post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 50 })
 
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id kind artifact_id idempotency_key memo metadata occurred_at created_at])
+        expect(parsed.keys).to match_array(%w[transaction_id kind artifact_id idempotency_key memo metadata occurred_at created_at])
         expect(parsed).to include(
           "kind" => "mint",
           "artifact_id" => artifact.id,
@@ -96,14 +96,14 @@ RSpec.describe "Ledger Mint", type: :request do
     context "冪等性" do
       it "同一 Idempotency-Key で 2 回 POST しても 1 件だけ作成され、2 回目も 200 で既存を返す" do
         post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 })
-        first_id = response.parsed_body["id"]
+        first_id = response.parsed_body["transaction_id"]
 
         expect do
           post_mint(params: { artifact_id: artifact.id, user_id: user.external_user_id, amount: 100 })
         end.not_to(change { LedgerTransaction.count })
 
         expect(response).to have_http_status(:ok)
-        expect(response.parsed_body["id"]).to eq(first_id)
+        expect(response.parsed_body["transaction_id"]).to eq(first_id)
         expect(user.account.reload.balance_fuju).to eq(100)
       end
     end
