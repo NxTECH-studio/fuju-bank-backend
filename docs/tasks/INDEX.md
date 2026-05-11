@@ -31,6 +31,7 @@
 | [users-search-by-public-id.md](./users-search-by-public-id.md) | `GET /users/search` を `public_id` 前方一致（大文字小文字無視）に切り替え（staging で空配列しか返らない問題の解消、AuthCore のハンドル世界観に整合） | 完了 |
 | [users-search-cross-service-identity.md](./users-search-cross-service-identity.md) | `bank.users.public_id` がほぼ NULL で検索が空になる件の根本対処方針決定（A: eager fan-out / B: AuthCore へ委譲 / C: lazy 強化 / D: introspect 経由補完）→ B + 最小 C を採用、AuthCore 側 (`feature/users-search-by-public-id`) と bank 側 (`feat/users-search-authcore-delegation`) で実装中 | 実装中 |
 | [server-bank-23-transfer-mfa-verify-flow.md](./server-bank-23-transfer-mfa-verify-flow.md) | 送金時 MFA 解消経路の仕様確定（AuthCore `POST /v1/auth/mfa/step-up` 新設候補） | 仕様確認済み（bank-backend コード変更 0 行、AuthCore 実装待ち） |
+| [server-bank-24-transfer-accept-external-user-id.md](./server-bank-24-transfer-accept-external-user-id.md) | `POST /ledger/transfer` を external_user_id (ULID) 受け入れに揃え、`from_user_id` を JWT current_user に倒す（search → transfer 動線の繋ぎ込み、`UserResponse.sub` も同梱） | 未着手 |
 
 ## 削除済み（履歴のみ Git ログから復元可能）
 
