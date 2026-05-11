@@ -95,6 +95,7 @@ class UsersController < ApplicationController
   def serialize_user(user)
     {
       id: user.id,
+      sub: user.external_user_id,
       name: user.name,
       public_id: user.public_id,
       public_key: user.public_key,
