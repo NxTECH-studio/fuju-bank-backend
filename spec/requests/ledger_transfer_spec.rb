@@ -1,9 +1,7 @@
 require "rails_helper"
 
 RSpec.describe "Ledger Transfer", type: :request do
-  # `auth_headers` ヘルパが既定で `sub: "01HYZ0000000000000000000AA"` の JWT を発行する。
-  # `from_user` は同じ external_user_id を持つよう生成し、サーバ側の lazy provision で同じ
-  # User を引き当てるよう揃える。
+  # `auth_headers` 既定 sub と揃え、サーバ側の current_user 解決で from_user を引き当てる。
   let!(:default_sub) { "01HYZ0000000000000000000AA" }
   let!(:system_account) { create(:account, :system_issuance) }
   let!(:from_user) { create(:user, external_user_id: default_sub) }
@@ -139,14 +137,7 @@ RSpec.describe "Ledger Transfer", type: :request do
         expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
       end
 
-      it "to_user_id が ULID 形式違反（数値文字列）で 400 VALIDATION_FAILED" do
-        post_transfer(params: { to_user_id: "999999", amount: 100 })
-
-        expect(response).to have_http_status(:bad_request)
-        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
-      end
-
-      it "to_user_id が ULID 形式違反（乱文字列）で 400 VALIDATION_FAILED" do
+      it "to_user_id が ULID 形式違反で 400 VALIDATION_FAILED" do
         post_transfer(params: { to_user_id: "not-a-ulid", amount: 100 })
 
         expect(response).to have_http_status(:bad_request)

@@ -43,10 +43,8 @@ class LedgerController < ApplicationController
     render(json: serialize_transaction(tx), status: :ok)
   end
 
-  # 送金元は body から指定できない（なりすまし送金を防ぐため）。サーバが
-  # JWT (`current_external_user_id`) から from_user を解決する。Bank に未登録の
-  # caller でも UserProvisioner で lazy 作成して扱う（残高 0 で作られるため、
-  # 続く Ledger::Transfer 内で INSUFFICIENT_BALANCE になる）。
+  # 送金元は body から受け取らない（なりすまし送金を防ぐため）。JWT の
+  # `current_external_user_id` から解決する。
   def transfer
     from_user = UserProvisioner.call(external_user_id: current_external_user_id)
     to_user = resolve_party_by_external_user_id!(transfer_params[:to_user_id], field: :to_user_id)
@@ -75,13 +73,8 @@ class LedgerController < ApplicationController
     raise AuthorizationError.new(message: "service token に scope=#{MINT_SCOPE} が必要です")
   end
 
-  # mint / transfer 共通の相手方 User 解決。引数 `external_user_id` は
-  # **AuthCore の `sub`（external_user_id; ULID 26 文字 Crockford Base32）**
-  # を期待する。Bank 内部 PK は受け付けない（cross-service 契約として
-  # external_user_id に統一）。Bank 側に該当 User が無ければ UserProvisioner
-  # で lazy 作成する（mint は fuju-emotion-model 経由の代理 mint で creator
-  # がまだ Bank HUD にログインしていないケース、transfer は送金先が未登録の
-  # ケースに対応）。`field:` はエラーメッセージに埋め込むパラメータ名。
+  # mint / transfer 共通の相手方 User 解決。`field:` はエラーメッセージに
+  # 埋め込む API パラメータ名（mint なら `:user_id`、transfer なら `:to_user_id`）。
   def resolve_party_by_external_user_id!(external_user_id, field:)
     raise ValidationFailedError.new(message: "#{field} is required") if external_user_id.blank?
     raise ValidationFailedError.new(message: "#{field} must be a ULID (external_user_id)") unless User::ULID_REGEX.match?(external_user_id)
