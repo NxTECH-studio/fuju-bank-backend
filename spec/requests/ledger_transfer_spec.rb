@@ -31,16 +31,17 @@ RSpec.describe "Ledger Transfer", type: :request do
         expect(system_account.reload.balance_fuju).to eq(0)
       end
 
-      it "レスポンスボディに tx の主要フィールドが含まれる" do
+      it "レスポンスボディに tx の主要フィールドと送金後の new_balance が含まれる" do
         post_transfer(params: { to_user_id: to_user.external_user_id, amount: 50, memo: "thanks" })
 
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id kind artifact_id idempotency_key memo metadata occurred_at created_at])
+        expect(parsed.keys).to match_array(%w[transaction_id kind artifact_id idempotency_key memo metadata occurred_at created_at new_balance])
         expect(parsed).to include(
           "kind" => "transfer",
           "artifact_id" => nil,
           "idempotency_key" => idempotency_key,
           "memo" => "thanks",
+          "new_balance" => 450,
         )
         expect(parsed["occurred_at"]).to match(/\A\d{4}-\d{2}-\d{2}T/)
       end
@@ -73,6 +74,14 @@ RSpec.describe "Ledger Transfer", type: :request do
 
         expect(response).to have_http_status(:ok)
         expect(LedgerTransaction.last.memo).to be_nil
+      end
+
+      it "残高と等しい amount を送金すると new_balance=0 が返る（境界値）" do
+        post_transfer(params: { to_user_id: to_user.external_user_id, amount: 500 })
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body["new_balance"]).to eq(0)
+        expect(from_user.account.reload.balance_fuju).to eq(0)
       end
     end
 
@@ -123,27 +132,30 @@ RSpec.describe "Ledger Transfer", type: :request do
     context "冪等性" do
       it "同一 Idempotency-Key で 2 回 POST しても 1 件だけ作成され、2 回目も 200 で既存を返す" do
         post_transfer(params: { to_user_id: to_user.external_user_id, amount: 100 })
-        first_id = response.parsed_body["id"]
+        first_id = response.parsed_body["transaction_id"]
 
         expect do
           post_transfer(params: { to_user_id: to_user.external_user_id, amount: 100 })
         end.not_to(change { LedgerTransaction.count })
 
         expect(response).to have_http_status(:ok)
-        expect(response.parsed_body["id"]).to eq(first_id)
+        expect(response.parsed_body["transaction_id"]).to eq(first_id)
+        # 再送経路でも new_balance は「現時点の送金元残高」（= 1 回目引き落とし後の値）を返す契約。
+        expect(response.parsed_body["new_balance"]).to eq(400)
         expect(from_user.account.reload.balance_fuju).to eq(400)
         expect(to_user.account.reload.balance_fuju).to eq(100)
       end
     end
 
     context "異常系" do
-      it "残高不足で 422 INSUFFICIENT_BALANCE（記帳されず残高も不変）" do
+      it "残高不足で 422 INSUFFICIENT_BALANCE（記帳されず残高も不変、エラー応答に new_balance を漏らさない）" do
         expect do
           post_transfer(params: { to_user_id: to_user.external_user_id, amount: 1_000 })
         end.not_to(change { LedgerTransaction.count })
 
         expect(response).to have_http_status(:unprocessable_entity)
         expect(response.parsed_body.dig("error", "code")).to eq("INSUFFICIENT_BALANCE")
+        expect(response.parsed_body).not_to(have_key("new_balance"))
         expect(from_user.account.reload.balance_fuju).to eq(500)
         expect(to_user.account.reload.balance_fuju).to eq(0)
       end
