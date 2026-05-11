@@ -28,7 +28,7 @@ class LedgerController < ApplicationController
   def mint
     enforce_mint_scope_for_service_actor!
 
-    user = resolve_recipient!(mint_params[:user_id])
+    user = resolve_party_by_external_user_id!(mint_params[:user_id], field: :user_id)
     artifact = resolve_optional_artifact(mint_params[:artifact_id])
 
     tx = Ledger::Mint.call(
@@ -43,9 +43,13 @@ class LedgerController < ApplicationController
     render(json: serialize_transaction(tx), status: :ok)
   end
 
+  # 送金元は body から受け取らない（なりすまし送金を防ぐため）。JWT の
+  # `current_external_user_id` から解決する。`current_user` で見つかれば
+  # account preload を再利用し、未プロビジョンなら UserProvisioner で
+  # lazy 作成する。
   def transfer
-    from_user = User.find(transfer_params[:from_user_id])
-    to_user = User.find(transfer_params[:to_user_id])
+    from_user = current_user || UserProvisioner.call(external_user_id: current_external_user_id)
+    to_user = resolve_party_by_external_user_id!(transfer_params[:to_user_id], field: :to_user_id)
 
     tx = Ledger::Transfer.call(
       from_user: from_user,
@@ -71,15 +75,11 @@ class LedgerController < ApplicationController
     raise AuthorizationError.new(message: "service token に scope=#{MINT_SCOPE} が必要です")
   end
 
-  # mint の受取人 User を解決する。`user_id` パラメータは
-  # **AuthCore の `sub`（external_user_id; ULID 26 文字 Crockford Base32）**
-  # を期待する。Bank 内部 PK は受け付けない（cross-service 契約として
-  # external_user_id に統一）。Bank 側に該当 User が無ければ
-  # UserProvisioner で lazy 作成する（fuju-emotion-model 経由の代理 mint で
-  # creator がまだ Bank HUD にログインしていないケースに対応）。
-  def resolve_recipient!(external_user_id)
-    raise ValidationFailedError.new(message: "user_id is required") if external_user_id.blank?
-    raise ValidationFailedError.new(message: "user_id must be a ULID (external_user_id)") unless User::ULID_REGEX.match?(external_user_id)
+  # mint / transfer 共通の相手方 User 解決。`field:` はエラーメッセージに
+  # 埋め込む API パラメータ名（mint なら `:user_id`、transfer なら `:to_user_id`）。
+  def resolve_party_by_external_user_id!(external_user_id, field:)
+    raise ValidationFailedError.new(message: "#{field} is required") if external_user_id.blank?
+    raise ValidationFailedError.new(message: "#{field} must be a ULID (external_user_id)") unless User::ULID_REGEX.match?(external_user_id)
 
     UserProvisioner.call(external_user_id: external_user_id)
   end
@@ -106,7 +106,6 @@ class LedgerController < ApplicationController
   def transfer_params
     @transfer_params ||= params.expect(
       ledger: [
-        :from_user_id,
         :to_user_id,
         :amount,
         :memo,

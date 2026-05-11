@@ -62,12 +62,12 @@ transfer (User → User):
 |---|---|---|---|
 | `POST` | `/users` | User 作成 | ローカル JWT |
 | `GET` | `/users/:id` | User 情報 + 残高取得 | ローカル JWT |
-| `GET` | `/users/search?q=:q&limit=:n` | 送金先検索（`public_id` 前方一致 / 大文字小文字無視、最大 20 件、自分除外） | ローカル JWT + introspection |
+| `GET` | `/users/search?q=:q&limit=:n` | 送金先検索（AuthCore `/v1/users/search` に委譲。`public_id` 前方一致 / 大小無視、英数字 2〜32 文字、最大 20 件、自分除外。`icon_url` も AuthCore から伝搬） | ローカル JWT + introspection |
 | `GET` | `/users/:id/transactions` | 取引履歴（mint / transfer 統合） | ローカル JWT |
 | `POST` | `/artifacts` | Artifact 作成 | ローカル JWT |
 | `GET` | `/artifacts/:id` | Artifact 情報 | ローカル JWT |
 | `POST` | `/ledger/mint` | 発行（マイニング層から） | ローカル JWT + introspection（service token は `mint:creator_payouts` scope 必須） |
-| `POST` | `/ledger/transfer` | 送金（User → User） | ローカル JWT + introspection |
+| `POST` | `/ledger/transfer` | 送金（User → User）。`to_user_id` は external_user_id (ULID 26 文字)。送金元は body から指定せず JWT (`current_user`) で確定する | ローカル JWT + introspection |
 
 > 認証ポリシーの詳細は [認証（AuthCore 連携）](#認証authcore-連携) を参照。
 

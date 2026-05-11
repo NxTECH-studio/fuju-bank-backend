@@ -13,12 +13,13 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:created)
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id name public_id public_key balance_fuju created_at])
+        expect(parsed.keys).to match_array(%w[id sub name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "name" => "Alice",
           "balance_fuju" => 0,
           "public_key" => nil,
           "public_id" => nil,
+          "sub" => default_sub,
         )
         expect(parsed["id"]).to be_present
         expect(parsed["created_at"]).to match(/\A\d{4}-\d{2}-\d{2}T/)
@@ -80,11 +81,18 @@ RSpec.describe "Users", type: :request do
         expect(response).to have_http_status(:ok)
       end
 
-      it "既存ユーザーの属性は body 値で上書きされない（public_id 含む）" do
-        post("/users/me", params: { name: "Updated", public_key: "pk_updated", public_id: "updated_pid" })
+      it "name / public_key は body 値で上書きされない（最小 C スコープ: public_id のみ更新）" do
+        post("/users/me", params: { name: "Updated", public_key: "pk_updated" })
 
-        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original", public_id: "original_pid")
-        expect(response.parsed_body).to include("name" => "Original", "public_key" => "pk_original", "public_id" => "original_pid")
+        expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original")
+        expect(response.parsed_body).to include("name" => "Original", "public_key" => "pk_original")
+      end
+
+      it "public_id は body 値で上書きされる（AuthCore 側 public_id 変更を bank へ伝播）" do
+        post("/users/me", params: { public_id: "updated_pid" })
+
+        expect(existing_user.reload.public_id).to eq("updated_pid")
+        expect(response.parsed_body).to include("public_id" => "updated_pid")
       end
     end
 
@@ -107,9 +115,10 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:ok)
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id name public_id public_key balance_fuju created_at])
+        expect(parsed.keys).to match_array(%w[id sub name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "id" => user.id,
+          "sub" => default_sub,
           "name" => "Alice",
           "public_id" => "alice",
           "public_key" => "pk_abc",
@@ -145,8 +154,10 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:ok)
         parsed = response.parsed_body
+        expect(parsed.keys).to match_array(%w[id sub name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "id" => user.id,
+          "sub" => default_sub,
           "name" => "Alice",
           "public_key" => "pk_abc",
           "balance_fuju" => 0,
