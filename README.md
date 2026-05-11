@@ -67,7 +67,7 @@ transfer (User → User):
 | `POST` | `/artifacts` | Artifact 作成 | ローカル JWT |
 | `GET` | `/artifacts/:id` | Artifact 情報 | ローカル JWT |
 | `POST` | `/ledger/mint` | 発行（マイニング層から） | ローカル JWT + introspection（service token は `mint:creator_payouts` scope 必須） |
-| `POST` | `/ledger/transfer` | 送金（User → User） | ローカル JWT + introspection |
+| `POST` | `/ledger/transfer` | 送金（User → User）。`to_user_id` は external_user_id (ULID 26 文字)。送金元は body から指定せず JWT (`current_user`) で確定する | ローカル JWT + introspection |
 
 > 認証ポリシーの詳細は [認証（AuthCore 連携）](#認証authcore-連携) を参照。
 

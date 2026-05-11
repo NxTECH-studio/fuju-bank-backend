@@ -13,12 +13,13 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:created)
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id name public_id public_key balance_fuju created_at])
+        expect(parsed.keys).to match_array(%w[id sub name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "name" => "Alice",
           "balance_fuju" => 0,
           "public_key" => nil,
           "public_id" => nil,
+          "sub" => default_sub,
         )
         expect(parsed["id"]).to be_present
         expect(parsed["created_at"]).to match(/\A\d{4}-\d{2}-\d{2}T/)
@@ -114,9 +115,10 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:ok)
         parsed = response.parsed_body
-        expect(parsed.keys).to match_array(%w[id name public_id public_key balance_fuju created_at])
+        expect(parsed.keys).to match_array(%w[id sub name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "id" => user.id,
+          "sub" => default_sub,
           "name" => "Alice",
           "public_id" => "alice",
           "public_key" => "pk_abc",
@@ -152,8 +154,10 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:ok)
         parsed = response.parsed_body
+        expect(parsed.keys).to match_array(%w[id sub name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "id" => user.id,
+          "sub" => default_sub,
           "name" => "Alice",
           "public_key" => "pk_abc",
           "balance_fuju" => 0,
