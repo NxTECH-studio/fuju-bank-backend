@@ -154,8 +154,10 @@ RSpec.describe "Users", type: :request do
 
         expect(response).to have_http_status(:ok)
         parsed = response.parsed_body
+        expect(parsed.keys).to match_array(%w[id sub name public_id public_key balance_fuju created_at])
         expect(parsed).to include(
           "id" => user.id,
+          "sub" => default_sub,
           "name" => "Alice",
           "public_key" => "pk_abc",
           "balance_fuju" => 0,

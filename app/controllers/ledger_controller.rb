@@ -44,9 +44,11 @@ class LedgerController < ApplicationController
   end
 
   # 送金元は body から受け取らない（なりすまし送金を防ぐため）。JWT の
-  # `current_external_user_id` から解決する。
+  # `current_external_user_id` から解決する。`current_user` で見つかれば
+  # account preload を再利用し、未プロビジョンなら UserProvisioner で
+  # lazy 作成する。
   def transfer
-    from_user = UserProvisioner.call(external_user_id: current_external_user_id)
+    from_user = current_user || UserProvisioner.call(external_user_id: current_external_user_id)
     to_user = resolve_party_by_external_user_id!(transfer_params[:to_user_id], field: :to_user_id)
 
     tx = Ledger::Transfer.call(

@@ -95,6 +95,31 @@ RSpec.describe "Ledger Transfer", type: :request do
       end
     end
 
+    # 送信元 (current_user) が bank に未登録だった場合、UserProvisioner で lazy 作成され、
+    # 残高 0 のため INSUFFICIENT_BALANCE で弾かれる経路を担保する。
+    context "送信元 ID 解決（current_user の lazy provision）" do
+      let!(:fresh_sub) { "01HZZ0000000000000000NEW03" }
+
+      before { stub_active_introspection(sub: fresh_sub) }
+
+      it "未登録 caller が送金しようとすると from_user が lazy 作成されたうえで残高不足になる" do
+        expect(User.find_by(external_user_id: fresh_sub)).to be_nil
+
+        expect do
+          post(
+            "/ledger/transfer",
+            params: { ledger: { to_user_id: to_user.external_user_id, amount: 100 } },
+            headers: headers.merge(auth_headers(sub: fresh_sub)),
+          )
+        end.to change { User.count }.by(1)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("INSUFFICIENT_BALANCE")
+        new_from = User.find_by!(external_user_id: fresh_sub)
+        expect(new_from.account.balance_fuju).to eq(0)
+      end
+    end
+
     context "冪等性" do
       it "同一 Idempotency-Key で 2 回 POST しても 1 件だけ作成され、2 回目も 200 で既存を返す" do
         post_transfer(params: { to_user_id: to_user.external_user_id, amount: 100 })
@@ -132,6 +157,13 @@ RSpec.describe "Ledger Transfer", type: :request do
 
       it "to_user_id 欠落で 400 VALIDATION_FAILED" do
         post_transfer(params: { amount: 100 })
+
+        expect(response).to have_http_status(:bad_request)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      it "to_user_id が空文字で 400 VALIDATION_FAILED" do
+        post_transfer(params: { to_user_id: "", amount: 100 })
 
         expect(response).to have_http_status(:bad_request)
         expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
