@@ -28,7 +28,7 @@ class Ledger::Notifier
     {
       type: "credit",
       amount: entry.amount,
-      transaction_id: @tx.id,
+      transaction_id: @tx.id.to_s,
       transaction_kind: @tx.kind,
       artifact_id: @tx.artifact_id,
       from_user_id: from_user_id,
