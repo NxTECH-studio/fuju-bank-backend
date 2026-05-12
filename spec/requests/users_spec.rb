@@ -7,7 +7,7 @@ RSpec.describe "Users", type: :request do
   describe "POST /users/me" do
     context "新規プロビジョニング" do
       it "User と Account を 1 件ずつ作成し 201 を返す" do
-        expect { post("/users/me", params: { name: "Alice" }) }
+        expect { post("/users/me", params: { name: "Alice", public_id: "alice" }) }
           .to change { User.count }.by(1)
           .and change { Account.count }.by(1)
 
@@ -18,7 +18,7 @@ RSpec.describe "Users", type: :request do
           "name" => "Alice",
           "balance_fuju" => 0,
           "public_key" => nil,
-          "public_id" => nil,
+          "public_id" => "alice",
           "sub" => default_sub,
         )
         expect(parsed["id"]).to be_present
@@ -34,14 +34,14 @@ RSpec.describe "Users", type: :request do
       end
 
       it "external_user_id は JWT の sub から取られる（body 値は無視される）" do
-        post("/users/me", params: { external_user_id: "01HZZZZZZZZZZZZZZZZZZZZZZZ", name: "Alice" })
+        post("/users/me", params: { external_user_id: "01HZZZZZZZZZZZZZZZZZZZZZZZ", name: "Alice", public_id: "alice" })
 
         expect(response).to have_http_status(:created)
         expect(User.last.external_user_id).to eq(default_sub)
       end
 
       it "作成された Account は kind=user / balance_fuju=0 で初期化される" do
-        post("/users/me", params: { name: "Alice" })
+        post("/users/me", params: { name: "Alice", public_id: "alice" })
 
         account = User.last.account
         expect(account.kind).to eq("user")
@@ -49,14 +49,14 @@ RSpec.describe "Users", type: :request do
       end
 
       it "public_key を指定した場合もレスポンスに反映される" do
-        post("/users/me", params: { name: "Bob", public_key: "pk_abc" })
+        post("/users/me", params: { name: "Bob", public_key: "pk_abc", public_id: "bob" })
 
         expect(response).to have_http_status(:created)
         expect(response.parsed_body).to include("name" => "Bob", "public_key" => "pk_abc")
       end
 
       it "name 未指定でも 201 を返す" do
-        expect { post("/users/me") }
+        expect { post("/users/me", params: { public_id: "alice" }) }
           .to change { User.count }.by(1)
 
         expect(response).to have_http_status(:created)
@@ -64,10 +64,51 @@ RSpec.describe "Users", type: :request do
       end
 
       it "name に空文字を渡してもそのまま受け入れる（モデル側に長さ制約なし）" do
-        post("/users/me", params: { name: "" })
+        post("/users/me", params: { name: "", public_id: "alice" })
 
         expect(response).to have_http_status(:created)
         expect(response.parsed_body).to include("name" => "")
+      end
+    end
+
+    context "public_id バリデーション" do
+      it "public_id 未指定で 422 VALIDATION_FAILED を返す" do
+        expect { post("/users/me", params: { name: "Alice" }) }
+          .not_to(change { User.count })
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      it "public_id が空文字で 422 VALIDATION_FAILED を返す" do
+        expect { post("/users/me", params: { name: "Alice", public_id: "" }) }
+          .not_to(change { User.count })
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      it "public_id 形式違反で 422 VALIDATION_FAILED を返す" do
+        expect { post("/users/me", params: { name: "Alice", public_id: "ab" }) }
+          .not_to(change { User.count })
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+      end
+
+      # ensure_public_id_present! の本来の動機: UserProvisioner#sync_existing! は
+      # public_id nil なら no-op で素通りしてしまうため、controller で先に弾く必要がある。
+      # この経路が回帰した場合「既存ユーザーが public_id を省略しても 200」になる。
+      context "既存ユーザーで public_id 省略" do
+        let!(:existing_user) { create(:user, external_user_id: default_sub, public_id: "original_pid") }
+
+        it "422 VALIDATION_FAILED を返し、既存 public_id は維持される" do
+          expect { post("/users/me", params: { name: "Updated" }) }
+            .not_to(change { existing_user.reload.public_id })
+
+          expect(response).to have_http_status(:unprocessable_entity)
+          expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+        end
       end
     end
 
@@ -75,14 +116,14 @@ RSpec.describe "Users", type: :request do
       let!(:existing_user) { create(:user, external_user_id: default_sub, name: "Original", public_key: "pk_original", public_id: "original_pid") }
 
       it "二度目以降は User を増やさず 200 を返す" do
-        expect { post("/users/me", params: { name: "Updated" }) }
+        expect { post("/users/me", params: { name: "Updated", public_id: "original_pid" }) }
           .not_to(change { User.count })
 
         expect(response).to have_http_status(:ok)
       end
 
       it "name / public_key は body 値で上書きされない（最小 C スコープ: public_id のみ更新）" do
-        post("/users/me", params: { name: "Updated", public_key: "pk_updated" })
+        post("/users/me", params: { name: "Updated", public_key: "pk_updated", public_id: "original_pid" })
 
         expect(existing_user.reload).to have_attributes(name: "Original", public_key: "pk_original")
         expect(response.parsed_body).to include("name" => "Original", "public_key" => "pk_original")
@@ -98,7 +139,7 @@ RSpec.describe "Users", type: :request do
 
     context "認証" do
       it "Authorization ヘッダがない場合 401 を返す", :skip_default_auth do
-        post("/users/me", params: { name: "Alice" })
+        post("/users/me", params: { name: "Alice", public_id: "alice" })
 
         expect(response).to have_http_status(:unauthorized)
         expect(response.parsed_body.dig("error", "code")).to eq("UNAUTHENTICATED")

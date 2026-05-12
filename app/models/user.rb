@@ -12,8 +12,9 @@ class User < ApplicationRecord
   validates :external_user_id, presence: true,
                                uniqueness: true,
                                format: { with: ULID_REGEX }
-  validates :public_id, uniqueness: { allow_nil: true },
-                        format: { with: PUBLIC_ID_REGEX, allow_nil: true }
+  validates :public_id, presence: true,
+                        uniqueness: true,
+                        format: { with: PUBLIC_ID_REGEX }
 
   after_create :bootstrap_account!
 
