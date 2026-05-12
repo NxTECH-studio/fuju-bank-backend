@@ -62,9 +62,13 @@ module JwtAuthenticatable
     current_actor_type == SERVICE_ACTOR
   end
 
-  # 呼ばれないコントローラでは DB ヒットしないよう lazy 評価する。
-  # service actor の場合 users テーブルに該当する行がないため呼ばれては
-  # ならない（呼ばれた場合は呼び出し側のロジックバグなので明示的に raise）。
+  # NOTE: 実運用上は ApplicationController#current_user が override しており、
+  # こちらの定義は呼ばれない（lazy provisioning は POST /users/me 限定の方針）。
+  # ここでは「service actor は current_user を持たない」というガード意図を
+  # 残しておくが、UserProvisioner.call は public_id 必須化以降 nil で呼ぶと
+  # presence validation で raise するため、誤って fallback で呼ばれても
+  # silent に User を作ることはない。include 順を変えるリファクタを行う場合は
+  # ApplicationController 側の find-only セマンティクスを維持すること。
   def current_user
     raise AuthenticationError.new(message: "service actor は current_user を持たない") if service_actor?
 

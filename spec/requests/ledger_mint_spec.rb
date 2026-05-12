@@ -155,22 +155,24 @@ RSpec.describe "Ledger Mint", type: :request do
       end
     end
 
-    # ID 空間の cross-service 一致を検証する。fuju-emotion-model からの代理 mint で
-    # creator がまだ Bank HUD にログインしていないケース（= Bank に User row が
-    # ない）でも、external_user_id (= AuthCore sub) で lazy 作成される。
-    context "受取人 ID 解決（ULID + lazy provision）" do
+    # users.public_id が NOT NULL になったため、Bank に未登録の ULID 宛て mint で
+    # lazy provision (public_id=nil) は presence validation で失敗する。代理 mint も
+    # creator が事前に POST /users/me 経由で bank に登録されている前提に変わった。
+    context "受取人 ID 解決" do
       let!(:fresh_external_id) { "01HZZ0000000000000000NEW01" }
 
-      it "Bank に User が無い ULID でも自動プロビジョンして mint 成功" do
+      it "Bank に User が無い ULID 宛てだと lazy provision に失敗し記帳されない" do
         expect(User.find_by(external_user_id: fresh_external_id)).to be_nil
 
         expect do
           post_mint(params: { artifact_id: artifact.id, user_id: fresh_external_id, amount: 50 })
-        end.to(change { User.count }.by(1).and(change { LedgerTransaction.count }.by(1)))
+        end.to not_change { LedgerTransaction.count }.and(not_change { User.count })
 
-        expect(response).to have_http_status(:ok)
-        new_user = User.find_by!(external_user_id: fresh_external_id)
-        expect(new_user.account.reload.balance_fuju).to eq(50)
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+        # 別原因（amount や ULID 形式）の 422 にすり替わらないよう public_id 由来であることを固定
+        # 実際のメッセージは Rails 既定の humanize で "Public can't be blank" 等
+        expect(response.parsed_body.dig("error", "message")).to match(/public/i)
       end
 
       it "既存 User は再利用されて新規行は作られない" do

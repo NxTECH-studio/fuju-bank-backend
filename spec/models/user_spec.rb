@@ -62,9 +62,10 @@ RSpec.describe User, type: :model do
     end
 
     describe "public_id" do
-      it "nil でも valid（lazy プロビジョニング想定）" do
+      it "nil だと invalid（AuthCore 側で NOT NULL のため bank も必須）" do
         user = build(:user, public_id: nil)
-        expect(user).to be_valid
+        expect(user).not_to be_valid
+        expect(user.errors[:public_id]).to be_present
       end
 
       it "英数字 + _- 3〜32 文字なら valid" do
@@ -128,10 +129,14 @@ RSpec.describe User, type: :model do
         expect(duplicate.errors[:public_id]).to be_present
       end
 
-      it "public_id = nil は重複してもよい" do
-        create(:user, public_id: nil)
-        another = build(:user, public_id: nil)
-        expect(another).to be_valid
+      # DB 層 NULL 許容を回帰テスト: 誤って users.public_id を NOT NULL 化すると
+      # 本番 DB に残存しうる legacy NULL 行で ridgepole が落ちて deploy 不能になるため、
+      # 「validation を bypass すれば NULL 行を作れる」= DB 制約が NULL 許容、を spec で固定する。
+      it "DB 層は NULL 許容（validate: false なら NULL public_id でも save できる）" do
+        user = build(:user, public_id: nil)
+
+        expect { user.save(validate: false) }.to change { User.count }.by(1)
+        expect(user.reload.public_id).to be_nil
       end
     end
   end

@@ -14,10 +14,13 @@ class ApplicationCable::Connection < ActionCable::Connection::Base
 
   private
 
+  # lazy provisioning は POST /users/me 限定 (public_id が必須のため Cable レイヤでは
+  # User を作れない)。未プロビジョン接続は AuthenticationError 経由で reject する
+  # （JWT 不正パスと同じ rescue 経路にまとめて、reject の制御フローを一本化）。
   def find_verified_user
     token = extract_jwt
     claims = Authcore::JwtVerifier.call(token: token)
-    UserProvisioner.call(external_user_id: claims["sub"])
+    User.find_by(external_user_id: claims["sub"]) or raise AuthenticationError
   rescue AuthenticationError
     reject_unauthorized_connection
   end
