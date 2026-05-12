@@ -124,8 +124,8 @@ RSpec.describe "User Transactions", type: :request do
       # 旧クライアント由来の legacy NULL ユーザーが counterparty に来ても 200 / nil で返ること、
       # serializer の nil-safety (`counterparty&.public_id`) を回帰防止する。
       it "counterparty が legacy NULL public_id を持っていても counterparty_public_id は nil で返る" do
-        # validate: false で app 層 presence を bypass し、本番に残存しうる legacy 行を再現
-        other_user.update_column(:public_id, nil)
+        # 本番に残存しうる legacy NULL 行を再現するため、意図的に app 層 presence を bypass。
+        other_user.update_column(:public_id, nil) # rubocop:disable Rails/SkipsModelValidations
 
         get("/users/#{user.id}/transactions")
 
