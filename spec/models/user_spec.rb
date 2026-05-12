@@ -128,6 +128,16 @@ RSpec.describe User, type: :model do
         expect(duplicate).not_to be_valid
         expect(duplicate.errors[:public_id]).to be_present
       end
+
+      # DB 層 NULL 許容を回帰テスト: 誤って users.public_id を NOT NULL 化すると
+      # 本番 DB に残存しうる legacy NULL 行で ridgepole が落ちて deploy 不能になるため、
+      # 「validation を bypass すれば NULL 行を作れる」= DB 制約が NULL 許容、を spec で固定する。
+      it "DB 層は NULL 許容（validate: false なら NULL public_id でも save できる）" do
+        user = build(:user, public_id: nil)
+
+        expect { user.save(validate: false) }.to change { User.count }.by(1)
+        expect(user.reload.public_id).to be_nil
+      end
     end
   end
 

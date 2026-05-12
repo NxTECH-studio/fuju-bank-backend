@@ -120,6 +120,23 @@ RSpec.describe "User Transactions", type: :request do
         expect(sent_entry["counterparty_public_id"]).to be_a(String)
       end
 
+      # users.public_id は DB 層で NULL 許容 (legacy 行受容のため。app 層 presence は別途)。
+      # 旧クライアント由来の legacy NULL ユーザーが counterparty に来ても 200 / nil で返ること、
+      # serializer の nil-safety (`counterparty&.public_id`) を回帰防止する。
+      it "counterparty が legacy NULL public_id を持っていても counterparty_public_id は nil で返る" do
+        # 本番に残存しうる legacy NULL 行を再現するため、意図的に app 層 presence を bypass。
+        other_user.update_column(:public_id, nil) # rubocop:disable Rails/SkipsModelValidations
+
+        get("/users/#{user.id}/transactions")
+
+        expect(response).to have_http_status(:ok)
+        sent_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == sent_tx.id.to_s }
+        expect(sent_entry).to include(
+          "counterparty_user_id" => other_user.id.to_s,
+          "counterparty_public_id" => nil,
+        )
+      end
+
       it "レスポンスの各 entry に想定キーが揃う" do
         get("/users/#{user.id}/transactions")
 
