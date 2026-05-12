@@ -5,28 +5,32 @@ RSpec.describe UserProvisioner do
 
   describe ".call" do
     context "新規作成" do
+      # public_id は AuthCore 側で NOT NULL のため bank 側でも presence 必須。
+      # 新規作成系は呼び出し側 (POST /users/me) が必ず public_id を渡す契約。
+      let!(:public_id) { "user_alice" }
+
       it "User を 1 件作成する" do
-        expect { described_class.call(external_user_id: external_user_id) }
+        expect { described_class.call(external_user_id: external_user_id, public_id: public_id) }
           .to change { User.count }.by(1)
       end
 
       it "Account(kind: 'user') を同時に作成する" do
-        expect { described_class.call(external_user_id: external_user_id) }
+        expect { described_class.call(external_user_id: external_user_id, public_id: public_id) }
           .to change { Account.where(kind: "user").count }.by(1)
       end
 
       it "作成された User の external_user_id は引数の値" do
-        user = described_class.call(external_user_id: external_user_id)
+        user = described_class.call(external_user_id: external_user_id, public_id: public_id)
         expect(user.external_user_id).to eq(external_user_id)
       end
 
       it "name 未指定の場合は nil で作成される" do
-        user = described_class.call(external_user_id: external_user_id)
+        user = described_class.call(external_user_id: external_user_id, public_id: public_id)
         expect(user.name).to be_nil
       end
 
       it "name / public_key を指定した場合、その値で作成される" do
-        user = described_class.call(external_user_id: external_user_id, name: "Alice", public_key: "pk_abc")
+        user = described_class.call(external_user_id: external_user_id, name: "Alice", public_key: "pk_abc", public_id: public_id)
         expect(user).to have_attributes(name: "Alice", public_key: "pk_abc")
       end
 
@@ -35,13 +39,18 @@ RSpec.describe UserProvisioner do
         expect(user.public_id).to eq("alice")
       end
 
+      it "public_id 未指定だと presence validation で RecordInvalid を raise する" do
+        expect { described_class.call(external_user_id: external_user_id) }
+          .to raise_error(ActiveRecord::RecordInvalid)
+      end
+
       it "作成された Account の balance_fuju は 0" do
-        user = described_class.call(external_user_id: external_user_id)
+        user = described_class.call(external_user_id: external_user_id, public_id: public_id)
         expect(user.account.balance_fuju).to eq(0)
       end
 
       it "戻り値の previously_new_record? は true" do
-        user = described_class.call(external_user_id: external_user_id)
+        user = described_class.call(external_user_id: external_user_id, public_id: public_id)
         expect(user.previously_new_record?).to be(true)
       end
     end
@@ -86,15 +95,6 @@ RSpec.describe UserProvisioner do
       end
     end
 
-    context "既存ユーザーの public_id が NULL の場合（旧クライアントで作成された legacy レコード）" do
-      let!(:legacy_user) { create(:user, external_user_id: external_user_id, public_id: nil) }
-
-      it "AuthCore から渡された public_id で充填される（本タスクの主目的）" do
-        described_class.call(external_user_id: external_user_id, public_id: "alice")
-        expect(legacy_user.reload.public_id).to eq("alice")
-      end
-    end
-
     context "public_id 衝突時の挙動" do
       let!(:other_user) { create(:user, public_id: "taken") }
       let!(:existing_user) { create(:user, external_user_id: external_user_id, public_id: "original_pid") }
@@ -105,6 +105,19 @@ RSpec.describe UserProvisioner do
         result = described_class.call(external_user_id: external_user_id, public_id: "taken")
 
         expect(result.public_id).to eq("original_pid")
+        expect(existing_user.reload.public_id).to eq("original_pid")
+      end
+    end
+
+    context "既存ユーザー更新時の format / length 違反" do
+      let!(:existing_user) { create(:user, external_user_id: external_user_id, public_id: "original_pid") }
+
+      # uniqueness 衝突だけは sync 諦めて既存値を返す（リネーム競合）。
+      # format 違反はクライアントバグなので silently swallow せず 422 として伝播させたい。
+      it "形式違反の public_id を渡されたら RecordInvalid を伝播する（silent swallow しない）" do
+        expect { described_class.call(external_user_id: external_user_id, public_id: "ab") }
+          .to raise_error(ActiveRecord::RecordInvalid)
+
         expect(existing_user.reload.public_id).to eq("original_pid")
       end
     end
@@ -123,7 +136,7 @@ RSpec.describe UserProvisioner do
         end
 
         expect do
-          described_class.call(external_user_id: external_user_id)
+          described_class.call(external_user_id: external_user_id, public_id: "boom_user")
         rescue StandardError
           nil
         end.not_to(change { User.count })

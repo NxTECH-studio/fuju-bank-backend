@@ -8,7 +8,8 @@ RSpec.describe ApplicationCable::Connection, type: :channel do
   end
 
   describe "subprotocol で JWT を渡したとき" do
-    it "有効な access token で接続が確立し current_user に external_user_id が乗る" do
+    it "有効な access token + プロビジョン済み User で接続が確立し current_user に external_user_id が乗る" do
+      create(:user, external_user_id: sub)
       token = issue_test_jwt(sub: sub)
 
       connect "/cable", headers: subprotocol_headers(token)
@@ -16,12 +17,15 @@ RSpec.describe ApplicationCable::Connection, type: :channel do
       expect(connection.current_user.external_user_id).to eq(sub)
     end
 
-    it "新規 sub の場合は User を lazy provision する" do
+    it "未プロビジョン sub では UserProvisioner を呼ばずに reject する" do
       token = issue_test_jwt(sub: sub)
+      allow(UserProvisioner).to receive(:call)
 
       expect do
         connect "/cable", headers: subprotocol_headers(token)
-      end.to change { User.count }.by(1)
+      end.to have_rejected_connection.and(not_change { User.count })
+
+      expect(UserProvisioner).not_to have_received(:call)
     end
 
     it "既存 User があれば再利用する" do
@@ -38,6 +42,7 @@ RSpec.describe ApplicationCable::Connection, type: :channel do
 
   describe "Authorization ヘッダ fallback" do
     it "Bearer ヘッダで接続が確立する" do
+      create(:user, external_user_id: sub)
       token = issue_test_jwt(sub: sub)
 
       connect "/cable", headers: { "Authorization" => "Bearer #{token}" }

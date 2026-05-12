@@ -33,6 +33,7 @@ class UsersController < ApplicationController
   end
 
   def upsert_me
+    ensure_public_id_present!
     user = UserProvisioner.call(
       external_user_id: current_external_user_id,
       name: upsert_params[:name],
@@ -64,6 +65,17 @@ class UsersController < ApplicationController
 
   def require_current_user!
     raise AuthenticationError unless current_user
+  end
+
+  # 既存ユーザー更新経路 (UserProvisioner#sync_existing!) は public_id nil だと
+  # no-op で素通りしてしまうため、controller で先に弾いて「public_id 必須」を呼び出し契約として明示する。
+  # 新規プロビジョン経路は User モデルの presence validation でも 422 になるが、両経路で挙動を揃える。
+  def ensure_public_id_present!
+    return if upsert_params[:public_id].present?
+
+    stub = User.new
+    stub.errors.add(:public_id, "can't be blank")
+    raise ActiveRecord::RecordInvalid.new(stub)
   end
 
   def upsert_params

@@ -86,33 +86,34 @@ RSpec.describe "Ledger Transfer", type: :request do
       end
     end
 
-    # cross-service identity (ULID) に統一した結果、bank 未登録の ULID を to_user_id に
-    # 渡したケースを mint と同じく lazy provision でカバーする。
-    context "受取人 ID 解決（ULID + lazy provision）" do
+    # users.public_id が NOT NULL になったため、bank 未登録の ULID を受取人/送信元として
+    # 渡しても lazy provision (UserProvisioner.call with public_id=nil) は presence
+    # validation で失敗する。クライアントは事前に POST /users/me 経由で bank に
+    # public_id を登録した状態で送金を行う契約。
+    context "受取人 ID 解決（bank 未登録 ULID）" do
       let!(:fresh_external_id) { "01HZZ0000000000000000NEW02" }
 
-      it "bank に未登録の ULID を to_user_id に渡すと新規 User + Account が作られて送金成立" do
+      it "bank に未登録の ULID を to_user_id に渡すと lazy provision に失敗し記帳されない" do
         expect(User.find_by(external_user_id: fresh_external_id)).to be_nil
 
         expect do
           post_transfer(params: { to_user_id: fresh_external_id, amount: 70 })
-        end.to(change { User.count }.by(1).and(change { LedgerTransaction.count }.by(1)))
+        end.to not_change { LedgerTransaction.count }.and(not_change { User.count })
 
-        expect(response).to have_http_status(:ok)
-        new_user = User.find_by!(external_user_id: fresh_external_id)
-        expect(new_user.account.reload.balance_fuju).to eq(70)
-        expect(from_user.account.reload.balance_fuju).to eq(430)
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+        # 別原因（amount や残高不足）の 422 にすり替わらないよう public_id 由来であることを固定
+        expect(response.parsed_body.dig("error", "message")).to match(/public/i)
+        expect(from_user.account.reload.balance_fuju).to eq(500)
       end
     end
 
-    # 送信元 (current_user) が bank に未登録だった場合、UserProvisioner で lazy 作成され、
-    # 残高 0 のため INSUFFICIENT_BALANCE で弾かれる経路を担保する。
-    context "送信元 ID 解決（current_user の lazy provision）" do
+    context "送信元 ID 解決（bank 未登録 caller）" do
       let!(:fresh_sub) { "01HZZ0000000000000000NEW03" }
 
       before { stub_active_introspection(sub: fresh_sub) }
 
-      it "未登録 caller が送金しようとすると from_user が lazy 作成されたうえで残高不足になる" do
+      it "未登録 caller が送金しようとすると current_user の lazy provision に失敗し記帳されない" do
         expect(User.find_by(external_user_id: fresh_sub)).to be_nil
 
         expect do
@@ -121,12 +122,11 @@ RSpec.describe "Ledger Transfer", type: :request do
             params: { ledger: { to_user_id: to_user.external_user_id, amount: 100 } },
             headers: headers.merge(auth_headers(sub: fresh_sub)),
           )
-        end.to change { User.count }.by(1)
+        end.to not_change { LedgerTransaction.count }.and(not_change { User.count })
 
         expect(response).to have_http_status(:unprocessable_entity)
-        expect(response.parsed_body.dig("error", "code")).to eq("INSUFFICIENT_BALANCE")
-        new_from = User.find_by!(external_user_id: fresh_sub)
-        expect(new_from.account.balance_fuju).to eq(0)
+        expect(response.parsed_body.dig("error", "code")).to eq("VALIDATION_FAILED")
+        expect(response.parsed_body.dig("error", "message")).to match(/public/i)
       end
     end
 

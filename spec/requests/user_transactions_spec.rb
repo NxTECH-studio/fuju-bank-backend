@@ -120,18 +120,6 @@ RSpec.describe "User Transactions", type: :request do
         expect(sent_entry["counterparty_public_id"]).to be_a(String)
       end
 
-      it "counterparty に public_id が未設定なら counterparty_public_id は nil で返る" do
-        other_user.update!(public_id: nil)
-
-        get("/users/#{user.id}/transactions")
-
-        sent_entry = response.parsed_body["data"].find { |e| e["transaction_id"] == sent_tx.id.to_s }
-        expect(sent_entry).to include(
-          "counterparty_user_id" => other_user.id.to_s,
-          "counterparty_public_id" => nil,
-        )
-      end
-
       it "レスポンスの各 entry に想定キーが揃う" do
         get("/users/#{user.id}/transactions")
 
